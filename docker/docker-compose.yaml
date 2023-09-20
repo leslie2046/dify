@@ -16,22 +16,22 @@ services:
       # The base URL of console application web frontend, refers to the Console base URL of WEB service if console domain is
       # different from api or web app domain.
       # example: http://cloud.dify.ai
-      CONSOLE_WEB_URL: ''
+      CONSOLE_WEB_URL: 'https://ai.njueai.com:8443'
       # Password for admin user initialization.
       # If left unset, admin user will not be prompted for a password when creating the initial admin account.
       INIT_PASSWORD: ''
       # The base URL of console application api server, refers to the Console base URL of WEB service if console domain is
       # different from api or web app domain.
       # example: http://cloud.dify.ai
-      CONSOLE_API_URL: ''
+      CONSOLE_API_URL: 'https://ai.njueai.com:8443'
       # The URL prefix for Service API endpoints, refers to the base URL of the current API service if api domain is
       # different from console domain.
       # example: http://api.dify.ai
-      SERVICE_API_URL: ''
+      SERVICE_API_URL: 'https://ai.njueai.com:8443'
       # The URL prefix for Web APP frontend, refers to the Web App base URL of WEB service if web app domain is different from
       # console or api domain.
       # example: http://udify.app
-      APP_WEB_URL: ''
+      APP_WEB_URL: 'https://ai.njueai.com:8443'
       # File preview or download Url prefix.
       # used to display File preview or download Url to the front-end or as Multi-model inputs;
       # Url is signed and has expiration time.
