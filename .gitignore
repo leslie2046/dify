@@ -154,6 +154,16 @@ docker/volumes/chroma/*
 
 docker/volumes*
 
+
+docker/volumes-test/app/storage/*
+docker/volumes-test/db/data/*
+docker/volumes-test/redis/data/*
+docker/volumes-test/weaviate/*
+docker/volumes-test/qdrant/*
+docker/volumes-test/etcd/*
+docker/volumes-test/minio/*
+docker/volumes-test/milvus/*
+
 sdks/python-client/build
 sdks/python-client/dist
 sdks/python-client/dify_client.egg-info
