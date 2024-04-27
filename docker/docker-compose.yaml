@@ -514,7 +514,7 @@ services:
       - api
       - web
     ports:
-      - "80:80"
+      - "8000:80"
       #- "443:443"
 networks:
   # create a network between sandbox, api and ssrf_proxy, and can not access outside.
