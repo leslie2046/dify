@@ -168,6 +168,8 @@ docker/volumes/chroma/*
 docker/nginx/conf.d/default.conf
 docker/middleware.env
 
+docker/volumes*
+
 sdks/python-client/build
 sdks/python-client/dist
 sdks/python-client/dify_client.egg-info
