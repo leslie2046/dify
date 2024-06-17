@@ -113,7 +113,7 @@ services:
       # The Qdrant client timeout setting.
       QDRANT_CLIENT_TIMEOUT: 20
       # The Qdrant client enable gRPC mode.
-      QDRANT_GRPC_ENABLED: 'false'
+      QDRANT_GRPC_ENABLED: 'true'
       # The Qdrant server gRPC mode PORT.
       QDRANT_GRPC_PORT: 6334
       # Milvus configuration Only available when VECTOR_STORE is `milvus`.
@@ -270,7 +270,7 @@ services:
       # The Qdrant client timeout setting.
       QDRANT_CLIENT_TIMEOUT: 20
       # The Qdrant client enable gRPC mode.
-      QDRANT_GRPC_ENABLED: 'false'
+      QDRANT_GRPC_ENABLED: 'true'
       # The Qdrant server gRPC mode PORT.
       QDRANT_GRPC_PORT: 6334
       # Milvus configuration Only available when VECTOR_STORE is `milvus`.
