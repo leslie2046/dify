@@ -1,1 +1,1 @@
-nohup npm run start &> output.log &
+nohup npm run start &> web.log &
