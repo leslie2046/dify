@@ -21,7 +21,7 @@ import ConfirmAddVar from '@/app/components/app/configuration/config-prompt/conf
 import { getNewVar } from '@/utils/var'
 import { varHighlightHTML } from '@/app/components/app/configuration/base/var-highlight'
 
-const MAX_QUESTION_NUM = 5
+const MAX_QUESTION_NUM = 100
 
 export type IOpeningStatementProps = {
   value: string
