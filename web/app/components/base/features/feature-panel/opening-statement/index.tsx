@@ -25,7 +25,7 @@ import { getNewVar } from '@/utils/var'
 import { varHighlightHTML } from '@/app/components/app/configuration/base/var-highlight'
 import type { PromptVariable } from '@/models/debug'
 
-const MAX_QUESTION_NUM = 5
+const MAX_QUESTION_NUM = 50
 
 export type OpeningStatementProps = {
   onChange?: OnFeaturesChange
