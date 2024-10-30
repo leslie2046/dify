@@ -127,7 +127,7 @@ const ChatWrapper = () => {
           />
           {
             !currentConversationId && (
-              <div className={`mx-auto w-full max-w-[720px] ${isMobile && 'px-4'}`}>
+              <div className={`mx-auto w-full ${isMobile && 'px-4'}`}>
                 <div className='mb-6' />
                 <ConfigPanel />
                 <div
@@ -172,7 +172,7 @@ const ChatWrapper = () => {
         config={appConfig}
         chatList={chatList}
         isResponding={isResponding}
-        chatContainerInnerClassName={`mx-auto pt-6 w-full max-w-[720px] ${isMobile && 'px-4'}`}
+        chatContainerInnerClassName={`mx-auto pt-6 w-full ${isMobile && 'px-4'}`}
         chatFooterClassName='pb-4'
         chatFooterInnerClassName={`mx-auto w-full max-w-[720px] ${isMobile && 'px-4'}`}
         onSend={doSend}
