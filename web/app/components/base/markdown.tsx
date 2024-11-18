@@ -211,6 +211,12 @@ const AudioBlock: CodeComponent = memo(({ node }) => {
 })
 AudioBlock.displayName = 'AudioBlock'
 
+const ScriptBlock = memo(({ node }: any) => {
+  const scriptContent = node.children[0]?.value || ''
+  return `<script>${scriptContent}</script>`
+})
+ScriptBlock.displayName = 'ScriptBlock'
+
 const Paragraph = (paragraph: any) => {
   const { node }: any = paragraph
   const children_node = node.children
@@ -276,6 +282,7 @@ export function Markdown(props: { content: string; className?: string }) {
           p: Paragraph,
           button: MarkdownButton,
           form: MarkdownForm,
+          script: ScriptBlock,
         }}
         linkTarget='_blank'
       >
