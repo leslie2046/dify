@@ -4621,7 +4621,7 @@ clone-response@^1.0.2:
   dependencies:
     mimic-response "^1.0.0"
 
-clsx@^2.1.0:
+clsx@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz"
   integrity sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==
@@ -10884,13 +10884,6 @@ react-fast-compare@^3.2.2:
   version "3.2.2"
   resolved "https://registry.npmjs.org/react-fast-compare/-/react-fast-compare-3.2.2.tgz"
   integrity sha512-nsO+KSNgo1SbJqJEYRE9ERzo7YtYbou/OqjSQKxV7jcKox7+usiUVZOAC+XnDOABXggQTno0Y1CpVnuWEc1boQ==
-
-react-headless-pagination@^1.1.4:
-  version "1.1.5"
-  resolved "https://registry.npmjs.org/react-headless-pagination/-/react-headless-pagination-1.1.5.tgz"
-  integrity sha512-WLtrF4DckZ89rri1tN0xr6aPlsQU/dSVmnafrsfTRUOS6w0gDgukv0tT3b2EGONeevkBUTLY14KpK7GNeoEoIg==
-  dependencies:
-    clsx "^2.1.0"
 
 react-hook-form@^7.0.0, react-hook-form@^7.51.4:
   version "7.51.4"
