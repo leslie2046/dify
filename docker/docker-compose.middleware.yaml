@@ -1,6 +1,6 @@
 services:
   # The postgres database.
-  db:
+  db-d:
     image: postgres:15-alpine
     restart: always
     env_file:
@@ -16,7 +16,7 @@ services:
                -c 'maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}'
                -c 'effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-4096MB}'
     volumes:
-      - ${PGDATA_HOST_VOLUME:-./volumes/db/data}:/var/lib/postgresql/data
+      - ${PGDATA_HOST_VOLUME:-./volumes-d/db/data}:/var/lib/postgresql/data
     ports:
       - "${EXPOSE_POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -26,14 +26,14 @@ services:
       retries: 30
 
   # The redis cache.
-  redis:
+  redis-d:
     image: redis:6-alpine
     restart: always
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD:-difyai123456}
     volumes:
       # Mount the redis data directory to the container.
-      - ${REDIS_HOST_VOLUME:-./volumes/redis/data}:/data
+      - ${REDIS_HOST_VOLUME:-./volumes-d/redis/data}:/data
     # Set the redis password when startup redis server.
     command: redis-server --requirepass ${REDIS_PASSWORD:-difyai123456}
     ports:
@@ -67,7 +67,7 @@ services:
   # ssrf_proxy server
   # for more information, please refer to
   # https://docs.dify.ai/learn-more/faq/install-faq#id-18.-why-is-ssrf_proxy-needed
-  ssrf_proxy:
+  ssrf_proxy-d:
     image: ubuntu/squid:latest
     restart: always
     volumes:
@@ -88,33 +88,18 @@ services:
       - ssrf_proxy_network
       - default
 
-  # The Weaviate vector store.
-  weaviate:
-    image: semitechnologies/weaviate:1.19.0
+  qdrant-d:
+    image: langgenius/qdrant:v1.7.3
     profiles:
-      - ""
-      - weaviate
+      - qdrant
     restart: always
     volumes:
-      # Mount the Weaviate data directory to the container.
-      - ${WEAVIATE_HOST_VOLUME:-./volumes/weaviate}:/var/lib/weaviate
-    env_file:
-      - ./middleware.env
+      - ./volumes-d/qdrant:/qdrant/storage
     environment:
-      # The Weaviate configurations
-      # You can refer to the [Weaviate](https://weaviate.io/developers/weaviate/config-refs/env-vars) documentation for more information.
-      PERSISTENCE_DATA_PATH: ${WEAVIATE_PERSISTENCE_DATA_PATH:-/var/lib/weaviate}
-      QUERY_DEFAULTS_LIMIT: ${WEAVIATE_QUERY_DEFAULTS_LIMIT:-25}
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: ${WEAVIATE_AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED:-false}
-      DEFAULT_VECTORIZER_MODULE: ${WEAVIATE_DEFAULT_VECTORIZER_MODULE:-none}
-      CLUSTER_HOSTNAME: ${WEAVIATE_CLUSTER_HOSTNAME:-node1}
-      AUTHENTICATION_APIKEY_ENABLED: ${WEAVIATE_AUTHENTICATION_APIKEY_ENABLED:-true}
-      AUTHENTICATION_APIKEY_ALLOWED_KEYS: ${WEAVIATE_AUTHENTICATION_APIKEY_ALLOWED_KEYS:-WVF5YThaHlkYwhGUSmCRgsX3tD5ngdN8pkih}
-      AUTHENTICATION_APIKEY_USERS: ${WEAVIATE_AUTHENTICATION_APIKEY_USERS:-hello@dify.ai}
-      AUTHORIZATION_ADMINLIST_ENABLED: ${WEAVIATE_AUTHORIZATION_ADMINLIST_ENABLED:-true}
-      AUTHORIZATION_ADMINLIST_USERS: ${WEAVIATE_AUTHORIZATION_ADMINLIST_USERS:-hello@dify.ai}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-difyai123456}
     ports:
-      - "${EXPOSE_WEAVIATE_PORT:-8080}:8080"
+      - "6333:6333"
+      - "6334:6334"
 
 networks:
   # create a network between sandbox, api and ssrf_proxy, and can not access outside.
