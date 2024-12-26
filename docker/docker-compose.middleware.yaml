@@ -91,10 +91,13 @@ services:
   qdrant-d:
     image: langgenius/qdrant:v1.7.3
     profiles:
+      - ""
       - qdrant
     restart: always
     volumes:
       - ./volumes-d/qdrant:/qdrant/storage
+    env_file:
+      - ./middleware.env
     environment:
       QDRANT_API_KEY: ${QDRANT_API_KEY:-difyai123456}
     ports:
