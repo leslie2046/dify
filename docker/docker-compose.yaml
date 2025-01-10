@@ -389,6 +389,14 @@ x-shared-env: &shared-api-worker-env
   CREATE_TIDB_SERVICE_JOB_ENABLED: ${CREATE_TIDB_SERVICE_JOB_ENABLED:-false}
   MAX_SUBMIT_COUNT: ${MAX_SUBMIT_COUNT:-100}
   TOP_K_MAX_VALUE: ${TOP_K_MAX_VALUE:-10}
+  HTTP_PROXY: ${HTTP_PROXY:-}
+  HTTPS_PROXY: ${HTTPS_PROXY:-}
+  GRPC_PROXY: ${GRPC_PROXY:-}
+  http_proxy: ${http_proxy:-}
+  https_proxy: ${https_proxy:-}
+  GRPC_ENABLE_HTTP_PROXY: ${GRPC_ENABLE_HTTP_PROXY:-1}
+  NO_PROXY: ${NO_PROXY:-}
+  no_proxy: ${no_proxy:-}
 
 services:
   # API service
