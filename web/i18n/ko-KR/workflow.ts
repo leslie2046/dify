@@ -302,6 +302,7 @@ const translation = {
     organizeBlocks: '블록 정리',
     change: '변경',
     optional: '(선택사항)',
+    moveToThisNode: '이 노드로 이동',
   },
   nodes: {
     common: {
@@ -647,7 +648,6 @@ const translation = {
       'varNotSet': '변수가 설정되지 않음',
     },
     tool: {
-      toAuthorize: '승인하기',
       inputVars: '입력 변수',
       outputVars: {
         text: '도구가 생성한 내용',

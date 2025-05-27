@@ -138,6 +138,7 @@ x-shared-env: &shared-api-worker-env
   QDRANT_CLIENT_TIMEOUT: ${QDRANT_CLIENT_TIMEOUT:-20}
   QDRANT_GRPC_ENABLED: ${QDRANT_GRPC_ENABLED:-false}
   QDRANT_GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
+  QDRANT_REPLICATION_FACTOR: ${QDRANT_REPLICATION_FACTOR:-1}
   MILVUS_URI: ${MILVUS_URI:-http://host.docker.internal:19530}
   MILVUS_DATABASE: ${MILVUS_DATABASE:-}
   MILVUS_TOKEN: ${MILVUS_TOKEN:-}
@@ -227,6 +228,7 @@ x-shared-env: &shared-api-worker-env
   OPENSEARCH_HOST: ${OPENSEARCH_HOST:-opensearch}
   OPENSEARCH_PORT: ${OPENSEARCH_PORT:-9200}
   OPENSEARCH_SECURE: ${OPENSEARCH_SECURE:-true}
+  OPENSEARCH_VERIFY_CERTS: ${OPENSEARCH_VERIFY_CERTS:-true}
   OPENSEARCH_AUTH_METHOD: ${OPENSEARCH_AUTH_METHOD:-basic}
   OPENSEARCH_USER: ${OPENSEARCH_USER:-admin}
   OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:-admin}
@@ -484,6 +486,12 @@ x-shared-env: &shared-api-worker-env
   PLUGIN_TENCENT_COS_SECRET_KEY: ${PLUGIN_TENCENT_COS_SECRET_KEY:-}
   PLUGIN_TENCENT_COS_SECRET_ID: ${PLUGIN_TENCENT_COS_SECRET_ID:-}
   PLUGIN_TENCENT_COS_REGION: ${PLUGIN_TENCENT_COS_REGION:-}
+  PLUGIN_ALIYUN_OSS_REGION: ${PLUGIN_ALIYUN_OSS_REGION:-}
+  PLUGIN_ALIYUN_OSS_ENDPOINT: ${PLUGIN_ALIYUN_OSS_ENDPOINT:-}
+  PLUGIN_ALIYUN_OSS_ACCESS_KEY_ID: ${PLUGIN_ALIYUN_OSS_ACCESS_KEY_ID:-}
+  PLUGIN_ALIYUN_OSS_ACCESS_KEY_SECRET: ${PLUGIN_ALIYUN_OSS_ACCESS_KEY_SECRET:-}
+  PLUGIN_ALIYUN_OSS_AUTH_VERSION: ${PLUGIN_ALIYUN_OSS_AUTH_VERSION:-v4}
+  PLUGIN_ALIYUN_OSS_PATH: ${PLUGIN_ALIYUN_OSS_PATH:-}
   ENABLE_OTEL: ${ENABLE_OTEL:-false}
   OTLP_BASE_ENDPOINT: ${OTLP_BASE_ENDPOINT:-http://localhost:4318}
   OTLP_API_KEY: ${OTLP_API_KEY:-}
@@ -501,7 +509,7 @@ x-shared-env: &shared-api-worker-env
 services:
   # API service
   api:
-    image: langgenius/dify-api:1.4.0
+    image: langgenius/dify-api:1.4.1
     restart: always
     environment:
       # Use the shared environment variables.
@@ -530,7 +538,7 @@ services:
   # worker service
   # The Celery worker for processing the queue.
   worker:
-    image: langgenius/dify-api:1.4.0
+    image: langgenius/dify-api:1.4.1
     restart: always
     environment:
       # Use the shared environment variables.
@@ -556,7 +564,7 @@ services:
 
   # Frontend web application.
   web:
-    image: langgenius/dify-web:1.4.0
+    image: langgenius/dify-web:1.4.1
     restart: always
     environment:
       CONSOLE_API_URL: ${CONSOLE_API_URL:-}
@@ -641,7 +649,7 @@ services:
 
   # plugin daemon
   plugin_daemon:
-    image: langgenius/dify-plugin-daemon:0.0.10-local
+    image: langgenius/dify-plugin-daemon:0.1.1-local
     restart: always
     environment:
       # Use the shared environment variables.
@@ -685,6 +693,12 @@ services:
       GRPC_ENABLE_HTTP_PROXY: ${GRPC_ENABLE_HTTP_PROXY:-1}
       NO_PROXY: ${NO_PROXY:-}
       no_proxy: ${no_proxy:-}
+      ALIYUN_OSS_REGION: ${PLUGIN_ALIYUN_OSS_REGION:-}
+      ALIYUN_OSS_ENDPOINT: ${PLUGIN_ALIYUN_OSS_ENDPOINT:-}
+      ALIYUN_OSS_ACCESS_KEY_ID: ${PLUGIN_ALIYUN_OSS_ACCESS_KEY_ID:-}
+      ALIYUN_OSS_ACCESS_KEY_SECRET: ${PLUGIN_ALIYUN_OSS_ACCESS_KEY_SECRET:-}
+      ALIYUN_OSS_AUTH_VERSION: ${PLUGIN_ALIYUN_OSS_AUTH_VERSION:-v4}
+      ALIYUN_OSS_PATH: ${PLUGIN_ALIYUN_OSS_PATH:-}
     ports:
       - "${EXPOSE_PLUGIN_DEBUGGING_PORT:-5003}:${PLUGIN_DEBUGGING_PORT:-5003}"
     volumes:
@@ -945,6 +959,7 @@ services:
       OB_SYS_PASSWORD: ${OCEANBASE_VECTOR_PASSWORD:-difyai123456}
       OB_TENANT_PASSWORD: ${OCEANBASE_VECTOR_PASSWORD:-difyai123456}
       OB_CLUSTER_NAME: ${OCEANBASE_CLUSTER_NAME:-difyai}
+      OB_SERVER_IP: 127.0.0.1
       MODE: MINI
     ports:
       - "${OCEANBASE_VECTOR_PORT:-2881}:2881"
