@@ -199,6 +199,8 @@ sdks/python-client/dify_client.egg-info
 !.vscode/README.md
 pyrightconfig.json
 api/.vscode
+# vscode Code History Extension
+.history
 
 .idea/
 
@@ -217,3 +219,4 @@ mise.toml
 # AI Assistant
 .roo/
 api/.env.backup
+/clickzetta
