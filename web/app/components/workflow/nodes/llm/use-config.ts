@@ -23,7 +23,7 @@ const useConfig = (id: string, payload: LLMNodeType) => {
   const { nodesReadOnly: readOnly } = useNodesReadOnly()
   const isChatMode = useIsChatMode()
 
-  const defaultConfig = useStore(s => s.nodesDefaultConfigs)[payload.type]
+  const defaultConfig = useStore(s => s.nodesDefaultConfigs)?.[payload.type]
   const [defaultRolePrefix, setDefaultRolePrefix] = useState<{ user: string; assistant: string }>({ user: '', assistant: '' })
   const { inputs, setInputs: doSetInputs } = useNodeCrud<LLMNodeType>(id, payload)
   const inputRef = useRef(inputs)
@@ -315,6 +315,14 @@ const useConfig = (id: string, payload: LLMNodeType) => {
     return [VarType.arrayObject, VarType.array, VarType.number, VarType.string, VarType.secret, VarType.arrayString, VarType.arrayNumber, VarType.file, VarType.arrayFile].includes(varPayload.type)
   }, [])
 
+  // reasoning format
+  const handleReasoningFormatChange = useCallback((reasoningFormat: 'tagged' | 'separated') => {
+    const newInputs = produce(inputs, (draft) => {
+      draft.reasoning_format = reasoningFormat
+    })
+    setInputs(newInputs)
+  }, [inputs, setInputs])
+
   const {
     availableVars,
     availableNodesWithParent,
@@ -355,6 +363,7 @@ const useConfig = (id: string, payload: LLMNodeType) => {
     setStructuredOutputCollapsed,
     handleStructureOutputEnableChange,
     filterJinja2InputVar,
+    handleReasoningFormatChange,
   }
 }
 
