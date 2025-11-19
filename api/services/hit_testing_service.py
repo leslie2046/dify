@@ -91,6 +91,7 @@ class HitTestingService:
         db.session.add(dataset_query)
         db.session.commit()
 
+        logger.info("Hit testing execution metadata: %s", execution_metadata)
         return cls.compact_retrieve_response(query, all_documents, execution_metadata)
 
     @classmethod
