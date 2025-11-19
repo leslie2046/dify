@@ -40,8 +40,10 @@ class HitTestingService:
         if not retrieval_model:
             retrieval_model = dataset.retrieval_model or default_retrieval_model
         document_ids_filter = None
+        execution_metadata = {}
         metadata_filtering_conditions = retrieval_model.get("metadata_filtering_conditions", {})
         if metadata_filtering_conditions:
+            start_metadata_filter = time.perf_counter()
             dataset_retrieval = DatasetRetrieval()
 
             from core.app.app_config.entities import MetadataFilteringCondition
@@ -60,10 +62,13 @@ class HitTestingService:
             )
             if metadata_filter_document_ids:
                 document_ids_filter = metadata_filter_document_ids.get(dataset.id, [])
+            
+            end_metadata_filter = time.perf_counter()
+            execution_metadata['metadata_filtering_latency'] = end_metadata_filter - start_metadata_filter
+
             if metadata_condition and not document_ids_filter:
                 return cls.compact_retrieve_response(query, [], {})
         
-        execution_metadata = {}
         all_documents = RetrievalService.retrieve(
             retrieval_method=RetrievalMethod(retrieval_model.get("search_method", RetrievalMethod.SEMANTIC_SEARCH)),
             dataset_id=dataset.id,
