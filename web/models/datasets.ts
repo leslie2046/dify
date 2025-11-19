@@ -650,6 +650,7 @@ export type HitTestingResponse = {
     tsne_position: TsnePosition
   }
   records: Array<HitTesting>
+  execution_metadata?: Record<string, number>
 }
 
 export type ExternalKnowledgeBaseHitTestingResponse = {

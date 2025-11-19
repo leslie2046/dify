@@ -1,4 +1,5 @@
 import concurrent.futures
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, current_app
@@ -43,6 +44,7 @@ class RetrievalService:
         reranking_mode: str = "reranking_model",
         weights: dict | None = None,
         document_ids_filter: list[str] | None = None,
+        execution_metadata: dict | None = None,
     ):
         if not query:
             return []
@@ -67,6 +69,7 @@ class RetrievalService:
                         all_documents=all_documents,
                         exceptions=exceptions,
                         document_ids_filter=document_ids_filter,
+                        execution_metadata=execution_metadata,
                     )
                 )
             if RetrievalMethod.is_support_semantic_search(retrieval_method):
@@ -83,6 +86,7 @@ class RetrievalService:
                         retrieval_method=retrieval_method,
                         exceptions=exceptions,
                         document_ids_filter=document_ids_filter,
+                        execution_metadata=execution_metadata,
                     )
                 )
             if RetrievalMethod.is_support_fulltext_search(retrieval_method):
@@ -99,6 +103,7 @@ class RetrievalService:
                         retrieval_method=retrieval_method,
                         exceptions=exceptions,
                         document_ids_filter=document_ids_filter,
+                        execution_metadata=execution_metadata,
                     )
                 )
             concurrent.futures.wait(futures, timeout=30, return_when=concurrent.futures.ALL_COMPLETED)
@@ -109,6 +114,7 @@ class RetrievalService:
         # Deduplicate documents for hybrid search to avoid duplicate chunks
         if retrieval_method == RetrievalMethod.HYBRID_SEARCH:
             all_documents = cls._deduplicate_documents(all_documents)
+            start = time.perf_counter()
             data_post_processor = DataPostProcessor(
                 str(dataset.tenant_id), reranking_mode, reranking_model, weights, False
             )
@@ -118,6 +124,9 @@ class RetrievalService:
                 score_threshold=score_threshold,
                 top_n=top_k,
             )
+            end = time.perf_counter()
+            if execution_metadata is not None:
+                execution_metadata["reranking_latency"] = end - start
 
         return all_documents
 
@@ -194,6 +203,7 @@ class RetrievalService:
         all_documents: list,
         exceptions: list,
         document_ids_filter: list[str] | None = None,
+        execution_metadata: dict | None = None,
     ):
         with flask_app.app_context():
             try:
@@ -206,6 +216,9 @@ class RetrievalService:
                 documents = keyword.search(
                     cls.escape_query_for_search(query), top_k=top_k, document_ids_filter=document_ids_filter
                 )
+                end = time.perf_counter()
+                if execution_metadata is not None:
+                    execution_metadata["keyword_search_latency"] = end - start
                 all_documents.extend(documents)
             except Exception as e:
                 exceptions.append(str(e))
@@ -223,6 +236,7 @@ class RetrievalService:
         retrieval_method: RetrievalMethod,
         exceptions: list,
         document_ids_filter: list[str] | None = None,
+        execution_metadata: dict | None = None,
     ):
         with flask_app.app_context():
             try:
@@ -231,6 +245,7 @@ class RetrievalService:
                     raise ValueError("dataset not found")
 
                 vector = Vector(dataset=dataset)
+                start = time.perf_counter()
                 documents = vector.search_by_vector(
                     query,
                     search_type="similarity_score_threshold",
@@ -239,6 +254,9 @@ class RetrievalService:
                     filter={"group_id": [dataset.id]},
                     document_ids_filter=document_ids_filter,
                 )
+                end = time.perf_counter()
+                if execution_metadata is not None:
+                    execution_metadata["embedding_search_latency"] = end - start
 
                 if documents:
                     if (
@@ -258,6 +276,9 @@ class RetrievalService:
                                 top_n=len(documents),
                             )
                         )
+                        end = time.perf_counter()
+                        if execution_metadata is not None:
+                            execution_metadata["reranking_latency"] = end - start
                     else:
                         all_documents.extend(documents)
             except Exception as e:
@@ -276,6 +297,7 @@ class RetrievalService:
         retrieval_method: str,
         exceptions: list,
         document_ids_filter: list[str] | None = None,
+        execution_metadata: dict | None = None,
     ):
         with flask_app.app_context():
             try:
@@ -285,9 +307,13 @@ class RetrievalService:
 
                 vector_processor = Vector(dataset=dataset)
 
+                start = time.perf_counter()
                 documents = vector_processor.search_by_full_text(
                     cls.escape_query_for_search(query), top_k=top_k, document_ids_filter=document_ids_filter
                 )
+                end = time.perf_counter()
+                if execution_metadata is not None:
+                    execution_metadata["full_text_search_latency"] = end - start
                 if documents:
                     if (
                         reranking_model
@@ -295,6 +321,7 @@ class RetrievalService:
                         and reranking_model.get("reranking_provider_name")
                         and retrieval_method == RetrievalMethod.FULL_TEXT_SEARCH
                     ):
+                        start = time.perf_counter()
                         data_post_processor = DataPostProcessor(
                             str(dataset.tenant_id), str(RerankMode.RERANKING_MODEL), reranking_model, None, False
                         )
