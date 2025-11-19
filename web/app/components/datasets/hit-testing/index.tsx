@@ -70,7 +70,6 @@ const HitTestingPage: FC<Props> = ({ datasetId }: Props) => {
   const [isShowModifyRetrievalModal, setIsShowModifyRetrievalModal] = useState(false)
   const [isShowRightPanel, { setTrue: showRightPanel, setFalse: hideRightPanel, set: setShowRightPanel }] = useBoolean(!isMobile)
   const renderHitResults = (results: HitTesting[] | ExternalKnowledgeBaseHitTesting[]) => {
-    console.log('HitResult:', hitResult)
     return (
       <div className='flex h-full flex-col rounded-tl-2xl bg-background-body px-4 py-3'>
         <div className='mb-2 shrink-0 pl-2 font-semibold leading-6 text-text-primary'>
@@ -86,13 +85,6 @@ const HitTestingPage: FC<Props> = ({ datasetId }: Props) => {
             ))}
           </div>
         )}
-        {/* DEBUG INFO */}
-        <div className="border border-red-500 p-2 m-2 text-xs">
-          <p>Debug Info:</p>
-          <p>Has HitResult: {hitResult ? 'Yes' : 'No'}</p>
-          <p>Has Metadata: {hitResult?.execution_metadata ? 'Yes' : 'No'}</p>
-          <pre>{JSON.stringify(hitResult?.execution_metadata, null, 2)}</pre>
-        </div>
         <div className='grow space-y-2 overflow-y-auto'>
           {results.map((record, idx) =>
             isExternal

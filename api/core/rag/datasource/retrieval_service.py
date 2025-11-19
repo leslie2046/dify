@@ -257,7 +257,7 @@ class RetrievalService:
                 end = time.perf_counter()
                 if execution_metadata is not None:
                     execution_metadata["embedding_search_latency"] = end - start
-                    current_app.logger.info("Embedding search latency: %s", execution_metadata["embedding_search_latency"])
+
 
                 if documents:
                     if (

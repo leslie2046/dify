@@ -91,7 +91,9 @@ class HitTestingService:
         db.session.add(dataset_query)
         db.session.commit()
 
-        logger.info("Hit testing execution metadata: %s", execution_metadata)
+        if execution_metadata is not None:
+            execution_metadata['total_latency'] = end - start
+
         return cls.compact_retrieve_response(query, all_documents, execution_metadata)
 
     @classmethod
