@@ -49,12 +49,7 @@ class RetrievalService:
         if not query:
             return []
 
-        start_get_dataset = time.perf_counter()
         dataset = cls._get_dataset(dataset_id)
-        end_get_dataset = time.perf_counter()
-        if execution_metadata is not None:
-            execution_metadata['dataset_fetching_latency'] = end_get_dataset - start_get_dataset
-
         if not dataset:
             return []
 
@@ -119,7 +114,12 @@ class RetrievalService:
 
         # Deduplicate documents for hybrid search to avoid duplicate chunks
         if retrieval_method == RetrievalMethod.HYBRID_SEARCH:
+            start_deduplication = time.perf_counter()
             all_documents = cls._deduplicate_documents(all_documents)
+            end_deduplication = time.perf_counter()
+            if execution_metadata is not None:
+                execution_metadata["deduplication_latency"] = end_deduplication - start_deduplication
+
             start = time.perf_counter()
             data_post_processor = DataPostProcessor(
                 str(dataset.tenant_id), reranking_mode, reranking_model, weights, False
