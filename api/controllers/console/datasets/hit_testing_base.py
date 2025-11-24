@@ -68,7 +68,11 @@ class DatasetsHitTestingBase:
                 external_retrieval_model=args["external_retrieval_model"],
                 limit=10,
             )
-            return {"query": response["query"], "records": marshal(response["records"], hit_testing_record_fields)}
+            return {
+                "query": response["query"],
+                "records": marshal(response["records"], hit_testing_record_fields),
+                "execution_metadata": response.get("execution_metadata", {}),
+            }
         except services.errors.index.IndexNotInitializedError:
             raise DatasetNotInitializedError()
         except ProviderTokenNotInitError as ex:

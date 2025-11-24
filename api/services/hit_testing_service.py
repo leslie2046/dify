@@ -40,8 +40,10 @@ class HitTestingService:
         if not retrieval_model:
             retrieval_model = dataset.retrieval_model or default_retrieval_model
         document_ids_filter = None
+        execution_metadata = {}
         metadata_filtering_conditions = retrieval_model.get("metadata_filtering_conditions", {})
         if metadata_filtering_conditions:
+            start_metadata_filter = time.perf_counter()
             dataset_retrieval = DatasetRetrieval()
 
             from core.app.app_config.entities import MetadataFilteringCondition
@@ -60,8 +62,13 @@ class HitTestingService:
             )
             if metadata_filter_document_ids:
                 document_ids_filter = metadata_filter_document_ids.get(dataset.id, [])
+            
+            end_metadata_filter = time.perf_counter()
+            execution_metadata['metadata_filtering_latency'] = end_metadata_filter - start_metadata_filter
+
             if metadata_condition and not document_ids_filter:
-                return cls.compact_retrieve_response(query, [])
+                return cls.compact_retrieve_response(query, [], {})
+        
         all_documents = RetrievalService.retrieve(
             retrieval_method=RetrievalMethod(retrieval_model.get("search_method", RetrievalMethod.SEMANTIC_SEARCH)),
             dataset_id=dataset.id,
@@ -76,6 +83,7 @@ class HitTestingService:
             reranking_mode=retrieval_model.get("reranking_mode") or "reranking_model",
             weights=retrieval_model.get("weights", None),
             document_ids_filter=document_ids_filter,
+            execution_metadata=execution_metadata,
         )
 
         end = time.perf_counter()
@@ -93,7 +101,10 @@ class HitTestingService:
         db.session.add(dataset_query)
         db.session.commit()
 
-        return cls.compact_retrieve_response(query, all_documents)
+        if execution_metadata is not None:
+            execution_metadata['total_latency'] = end - start
+
+        return cls.compact_retrieve_response(query, all_documents, execution_metadata)
 
     @classmethod
     def external_retrieve(
@@ -137,7 +148,7 @@ class HitTestingService:
         return dict(cls.compact_external_retrieve_response(dataset, query, all_documents))
 
     @classmethod
-    def compact_retrieve_response(cls, query: str, documents: list[Document]) -> dict[Any, Any]:
+    def compact_retrieve_response(cls, query: str, documents: list[Document], execution_metadata: dict | None = None) -> dict[Any, Any]:
         records = RetrievalService.format_retrieval_documents(documents)
 
         return {
@@ -145,6 +156,7 @@ class HitTestingService:
                 "content": query,
             },
             "records": [record.model_dump() for record in records],
+            "execution_metadata": execution_metadata or {},
         }
 
     @classmethod

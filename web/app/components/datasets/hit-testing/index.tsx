@@ -69,28 +69,41 @@ const HitTestingPage: FC<Props> = ({ datasetId }: Props) => {
   const [retrievalConfig, setRetrievalConfig] = useState(currentDataset?.retrieval_model_dict as RetrievalConfig)
   const [isShowModifyRetrievalModal, setIsShowModifyRetrievalModal] = useState(false)
   const [isShowRightPanel, { setTrue: showRightPanel, setFalse: hideRightPanel, set: setShowRightPanel }] = useBoolean(!isMobile)
-  const renderHitResults = (results: HitTesting[] | ExternalKnowledgeBaseHitTesting[]) => (
-    <div className='flex h-full flex-col rounded-tl-2xl bg-background-body px-4 py-3'>
-      <div className='mb-2 shrink-0 pl-2 font-semibold leading-6 text-text-primary'>
-        {t('datasetHitTesting.hit.title', { num: results.length })}
-      </div>
-      <div className='grow space-y-2 overflow-y-auto'>
-        {results.map((record, idx) =>
-          isExternal
-            ? (
-              <ResultItemExternal
-                key={idx}
-                positionId={idx + 1}
-                payload={record as ExternalKnowledgeBaseHitTesting}
-              />
-            )
-            : (
-              <ResultItem key={idx} payload={record as HitTesting} />
-            ),
+  const renderHitResults = (results: HitTesting[] | ExternalKnowledgeBaseHitTesting[]) => {
+    return (
+      <div className='flex h-full flex-col rounded-tl-2xl bg-background-body px-4 py-3'>
+        <div className='mb-2 shrink-0 pl-2 font-semibold leading-6 text-text-primary'>
+          {t('datasetHitTesting.hit.title', { num: results.length })}
+        </div>
+        {hitResult?.execution_metadata && (
+          <div className="mb-2 px-2 text-xs text-text-tertiary flex flex-wrap gap-x-4 gap-y-1">
+            {Object.entries(hitResult.execution_metadata).map(([key, value]) => (
+              <div key={key} className="flex items-center">
+                <span className="capitalize mr-1">{key.replace('_latency', '').replace(/_/g, ' ')}:</span>
+                <span className="font-medium text-text-secondary">{(value * 1000).toFixed(2)}ms</span>
+              </div>
+            ))}
+          </div>
         )}
+        <div className='grow space-y-2 overflow-y-auto'>
+          {results.map((record, idx) =>
+            isExternal
+              ? (
+                <ResultItemExternal
+                  key={idx}
+                  positionId={idx + 1}
+                  payload={record as ExternalKnowledgeBaseHitTesting}
+                />
+              )
+              : (
+                <ResultItem key={idx} payload={record as HitTesting} />
+              ),
+          )}
+        </div>
       </div>
-    </div>
-  )
+
+    )
+  }
 
   const renderEmptyState = () => (
     <div className='flex h-full flex-col items-center justify-center rounded-tl-2xl bg-background-body px-4 py-3'>
