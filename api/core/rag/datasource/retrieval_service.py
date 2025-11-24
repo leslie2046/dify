@@ -253,6 +253,7 @@ class RetrievalService:
                     raise ValueError("dataset not found")
 
                 vector = Vector(dataset=dataset)
+                start = time.perf_counter()
                 documents = vector.search_by_vector(
                     query,
                     search_type="similarity_score_threshold",
@@ -316,6 +317,7 @@ class RetrievalService:
 
                 vector_processor = Vector(dataset=dataset)
 
+                start = time.perf_counter()
                 documents = vector_processor.search_by_full_text(
                     cls.escape_query_for_search(query), top_k=top_k, document_ids_filter=document_ids_filter
                 )
