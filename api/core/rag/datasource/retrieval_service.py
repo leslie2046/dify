@@ -247,6 +247,30 @@ class RetrievalService:
         all_documents: list,
         retrieval_method: RetrievalMethod,
         exceptions: list,
+        document_ids_filter: list[str] | None = None,
+        execution_metadata: dict | None = None,
+    ):
+        with flask_app.app_context():
+            try:
+                dataset = cls._get_dataset(dataset_id)
+                if not dataset:
+                    raise ValueError("dataset not found")
+
+                start_init = time.perf_counter()
+                vector = Vector(dataset=dataset)
+                end_init = time.perf_counter()
+                if execution_metadata is not None:
+                    execution_metadata["embedding_search_init_latency"] = end_init - start_init
+
+                start = time.perf_counter()
+                documents = vector.search_by_vector(
+                    query,
+                    search_type="similarity_score_threshold",
+                    top_k=top_k,
+                    score_threshold=score_threshold,
+                    filter={"group_id": [dataset.id]},
+                    document_ids_filter=document_ids_filter,
+                )
                 end = time.perf_counter()
                 if execution_metadata is not None:
                     execution_metadata["embedding_search_latency"] = end - start
