@@ -49,7 +49,12 @@ class RetrievalService:
         if not query:
             return []
 
+        start_load = time.perf_counter()
         dataset = cls._get_dataset(dataset_id)
+        end_load = time.perf_counter()
+        if execution_metadata is not None:
+            execution_metadata['dataset_load_latency'] = end_load - start_load
+
         if not dataset:
             return []
 
@@ -242,26 +247,6 @@ class RetrievalService:
         all_documents: list,
         retrieval_method: RetrievalMethod,
         exceptions: list,
-        document_ids_filter: list[str] | None = None,
-        execution_metadata: dict | None = None,
-    ):
-        with flask_app.app_context():
-            try:
-                start = time.perf_counter()
-                dataset = cls._get_dataset(dataset_id)
-                if not dataset:
-                    raise ValueError("dataset not found")
-
-                vector = Vector(dataset=dataset)
-                start = time.perf_counter()
-                documents = vector.search_by_vector(
-                    query,
-                    search_type="similarity_score_threshold",
-                    top_k=top_k,
-                    score_threshold=score_threshold,
-                    filter={"group_id": [dataset.id]},
-                    document_ids_filter=document_ids_filter,
-                )
                 end = time.perf_counter()
                 if execution_metadata is not None:
                     execution_metadata["embedding_search_latency"] = end - start
