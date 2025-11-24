@@ -36,9 +36,17 @@ class Vector:
         if attributes is None:
             attributes = ["doc_id", "dataset_id", "document_id", "doc_hash"]
         self._dataset = dataset
+        self.init_latencies = {}
+
+        start_embed = time.perf_counter()
         self._embeddings = self._get_embeddings()
+        self.init_latencies['embedding_model_init'] = time.perf_counter() - start_embed
+
         self._attributes = attributes
+
+        start_vdb = time.perf_counter()
         self._vector_processor = self._init_vector()
+        self.init_latencies['vector_db_init'] = time.perf_counter() - start_vdb
 
     def _init_vector(self) -> BaseVector:
         vector_type = dify_config.VECTOR_STORE
