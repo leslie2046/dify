@@ -64,23 +64,6 @@ class RetrievalService:
         # Optimize multithreading with thread pools
         with ThreadPoolExecutor(max_workers=dify_config.RETRIEVAL_SERVICE_EXECUTORS) as executor:  # type: ignore
             futures = []
-            
-            # Pre-initialize DataPostProcessor in parallel
-            data_post_processor_future = None
-            if (
-                reranking_model
-                and reranking_model.get("reranking_model_name")
-                and reranking_model.get("reranking_provider_name")
-            ):
-                 data_post_processor_future = executor.submit(
-                    DataPostProcessor,
-                    str(dataset.tenant_id),
-                    str(RerankMode.RERANKING_MODEL) if retrieval_method != RetrievalMethod.HYBRID_SEARCH else reranking_mode,
-                    reranking_model,
-                    weights if retrieval_method == RetrievalMethod.HYBRID_SEARCH else None,
-                    False
-                )
-
             if retrieval_method == RetrievalMethod.KEYWORD_SEARCH:
                 futures.append(
                     executor.submit(
@@ -110,7 +93,6 @@ class RetrievalService:
                         exceptions=exceptions,
                         document_ids_filter=document_ids_filter,
                         execution_metadata=execution_metadata,
-                        data_post_processor_future=data_post_processor_future,
                     )
                 )
             if RetrievalMethod.is_support_fulltext_search(retrieval_method):
@@ -128,7 +110,6 @@ class RetrievalService:
                         exceptions=exceptions,
                         document_ids_filter=document_ids_filter,
                         execution_metadata=execution_metadata,
-                        data_post_processor_future=data_post_processor_future,
                     )
                 )
             concurrent.futures.wait(futures, timeout=30, return_when=concurrent.futures.ALL_COMPLETED)
@@ -145,12 +126,9 @@ class RetrievalService:
                 execution_metadata["deduplication_latency"] = end_deduplication - start_deduplication
 
             start = time.perf_counter()
-            if data_post_processor_future:
-                data_post_processor = data_post_processor_future.result()
-            else:
-                data_post_processor = DataPostProcessor(
-                    str(dataset.tenant_id), reranking_mode, reranking_model, weights, False
-                )
+            data_post_processor = DataPostProcessor(
+                str(dataset.tenant_id), reranking_mode, reranking_model, weights, False
+            )
             all_documents = data_post_processor.invoke(
                 query=query,
                 documents=all_documents,
@@ -271,7 +249,6 @@ class RetrievalService:
         exceptions: list,
         document_ids_filter: list[str] | None = None,
         execution_metadata: dict | None = None,
-        data_post_processor_future: concurrent.futures.Future | None = None,
     ):
         with flask_app.app_context():
             try:
@@ -309,12 +286,9 @@ class RetrievalService:
                         and reranking_model.get("reranking_provider_name")
                         and retrieval_method == RetrievalMethod.SEMANTIC_SEARCH
                     ):
-                        if data_post_processor_future:
-                            data_post_processor = data_post_processor_future.result()
-                        else:
-                            data_post_processor = DataPostProcessor(
-                                str(dataset.tenant_id), str(RerankMode.RERANKING_MODEL), reranking_model, None, False
-                            )
+                        data_post_processor = DataPostProcessor(
+                            str(dataset.tenant_id), str(RerankMode.RERANKING_MODEL), reranking_model, None, False
+                        )
                         all_documents.extend(
                             data_post_processor.invoke(
                                 query=query,
@@ -345,7 +319,6 @@ class RetrievalService:
         exceptions: list,
         document_ids_filter: list[str] | None = None,
         execution_metadata: dict | None = None,
-        data_post_processor_future: concurrent.futures.Future | None = None,
     ):
         with flask_app.app_context():
             try:
@@ -378,12 +351,9 @@ class RetrievalService:
                         and retrieval_method == RetrievalMethod.FULL_TEXT_SEARCH
                     ):
                         start = time.perf_counter()
-                        if data_post_processor_future:
-                            data_post_processor = data_post_processor_future.result()
-                        else:
-                            data_post_processor = DataPostProcessor(
-                                str(dataset.tenant_id), str(RerankMode.RERANKING_MODEL), reranking_model, None, False
-                            )
+                        data_post_processor = DataPostProcessor(
+                            str(dataset.tenant_id), str(RerankMode.RERANKING_MODEL), reranking_model, None, False
+                        )
                         all_documents.extend(
                             data_post_processor.invoke(
                                 query=query,
