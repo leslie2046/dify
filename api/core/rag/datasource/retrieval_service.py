@@ -119,12 +119,7 @@ class RetrievalService:
 
         # Deduplicate documents for hybrid search to avoid duplicate chunks
         if retrieval_method == RetrievalMethod.HYBRID_SEARCH:
-            start_deduplication = time.perf_counter()
             all_documents = cls._deduplicate_documents(all_documents)
-            end_deduplication = time.perf_counter()
-            if execution_metadata is not None:
-                execution_metadata["deduplication_latency"] = end_deduplication - start_deduplication
-
             start = time.perf_counter()
             data_post_processor = DataPostProcessor(
                 str(dataset.tenant_id), reranking_mode, reranking_model, weights, False
@@ -256,11 +251,8 @@ class RetrievalService:
                 if not dataset:
                     raise ValueError("dataset not found")
 
-                start_init = time.perf_counter()
                 vector = Vector(dataset=dataset)
-                end_init = time.perf_counter()
                 if execution_metadata is not None:
-                    execution_metadata["embedding_search_init_latency"] = end_init - start_init
                     if hasattr(vector, 'init_latencies'):
                         execution_metadata['embedding_model_init_latency'] = vector.init_latencies.get('embedding_model_init', 0)
 
@@ -326,11 +318,8 @@ class RetrievalService:
                 if not dataset:
                     raise ValueError("dataset not found")
 
-                start_init = time.perf_counter()
                 vector_processor = Vector(dataset=dataset)
-                end_init = time.perf_counter()
                 if execution_metadata is not None:
-                    execution_metadata["full_text_search_init_latency"] = end_init - start_init
                     if hasattr(vector_processor, 'init_latencies'):
                         execution_metadata['full_text_model_init_latency'] = vector_processor.init_latencies.get('embedding_model_init', 0)
 
