@@ -73,9 +73,7 @@ class Vector:
 
         self._attributes = attributes
 
-        start_vdb = time.perf_counter()
         self._vector_processor = self._init_vector()
-        self.init_latencies['vector_db_init'] = time.perf_counter() - start_vdb
 
     # ==================== Cache Utility Methods ====================
     @classmethod
