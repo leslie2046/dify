@@ -1,6 +1,9 @@
+import hashlib
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from typing import Any
 
 from sqlalchemy import select
@@ -32,6 +35,32 @@ class AbstractVectorFactory(ABC):
 
 
 class Vector:
+    # ==================== Enhanced Cache Configuration ====================
+    # Cache TTL: 30 minutes to prevent using stale configurations
+    _CACHE_TTL_SECONDS = 1800
+    # Maximum cache size: limit memory usage to ~100 instances
+    _CACHE_MAX_SIZE = 100
+
+    # LRU cache support using OrderedDict (maintains insertion order)
+    _vector_processor_cache: OrderedDict = OrderedDict()
+    _embedding_model_cache: OrderedDict = OrderedDict()
+
+    # Thread locks for safe concurrent cache access
+    _vector_processor_lock = threading.Lock()
+    _embedding_model_lock = threading.Lock()
+
+    # Monitoring metrics for cache performance tracking
+    _cache_stats = {
+        "embedding_hits": 0,
+        "embedding_misses": 0,
+        "embedding_evictions": 0,
+        "embedding_expired": 0,
+        "processor_hits": 0,
+        "processor_misses": 0,
+        "processor_evictions": 0,
+        "processor_expired": 0,
+    }
+
     def __init__(self, dataset: Dataset, attributes: list | None = None):
         if attributes is None:
             attributes = ["doc_id", "dataset_id", "document_id", "doc_hash"]
@@ -48,7 +77,102 @@ class Vector:
         self._vector_processor = self._init_vector()
         self.init_latencies['vector_db_init'] = time.perf_counter() - start_vdb
 
+    # ==================== Cache Utility Methods ====================
+    @classmethod
+    def _generate_embedding_cache_key(cls, tenant_id: str, provider: str, model: str) -> str:
+        """Generate cache key for embedding model based on tenant, provider, and model"""
+        key_str = f"{tenant_id}:{provider}:{model}"
+        return hashlib.md5(key_str.encode()).hexdigest()
+
+    @classmethod
+    def _generate_processor_cache_key(cls, dataset_id: str, vector_type: str) -> str:
+        """Generate cache key for vector processor based on dataset and vector type"""
+        key_str = f"{dataset_id}:{vector_type}"
+        return hashlib.md5(key_str.encode()).hexdigest()
+
+    @classmethod
+    def get_cache_stats(cls) -> dict:
+        """Get current cache statistics including hit rates"""
+        stats = cls._cache_stats.copy()
+        
+        # Calculate hit rates
+        embedding_total = stats["embedding_hits"] + stats["embedding_misses"]
+        processor_total = stats["processor_hits"] + stats["processor_misses"]
+        
+        stats["embedding_hit_rate"] = (
+            stats["embedding_hits"] / embedding_total if embedding_total > 0 else 0
+        )
+        stats["processor_hit_rate"] = (
+            stats["processor_hits"] / processor_total if processor_total > 0 else 0
+        )
+        
+        stats["embedding_cache_size"] = len(cls._embedding_model_cache)
+        stats["processor_cache_size"] = len(cls._vector_processor_cache)
+        
+        return stats
+
+    @classmethod
+    def _is_cache_expired(cls, cached_time: float) -> bool:
+        """Check if cached item has exceeded TTL"""
+        return (time.time() - cached_time) > cls._CACHE_TTL_SECONDS
+
+    @classmethod
+    def _evict_lru_embedding(cls):
+        """Evict least recently used embedding from cache"""
+        if cls._embedding_model_cache:
+            # OrderedDict.popitem(last=False) removes oldest (LRU) item
+            cls._embedding_model_cache.popitem(last=False)
+            cls._cache_stats["embedding_evictions"] += 1
+
+    @classmethod
+    def _evict_lru_processor(cls):
+        """Evict least recently used vector processor from cache"""
+        if cls._vector_processor_cache:
+            cls._vector_processor_cache.popitem(last=False)
+            cls._cache_stats["processor_evictions"] += 1
+
+    @classmethod
+    def _cleanup_expired_embeddings(cls):
+        """Remove expired embeddings from cache"""
+        current_time = time.time()
+        expired_keys = [
+            key for key, (_, cached_time) in cls._embedding_model_cache.items()
+            if (current_time - cached_time) > cls._CACHE_TTL_SECONDS
+        ]
+        for key in expired_keys:
+            del cls._embedding_model_cache[key]
+            cls._cache_stats["embedding_expired"] += 1
+
+    @classmethod
+    def _cleanup_expired_processors(cls):
+        """Remove expired vector processors from cache"""
+        current_time = time.time()
+        expired_keys = [
+            key for key, (_, cached_time) in cls._vector_processor_cache.items()
+            if (current_time - cached_time) > cls._CACHE_TTL_SECONDS
+        ]
+        for key in expired_keys:
+            del cls._vector_processor_cache[key]
+            cls._cache_stats["processor_expired"] += 1
+
+    @classmethod
+    def clear_cache(cls):
+        """Clear all caches (useful for testing or forced refresh)"""
+        with cls._embedding_model_lock:
+            cls._embedding_model_cache.clear()
+        with cls._vector_processor_lock:
+            cls._vector_processor_cache.clear()
+        logger.info("All vector and embedding caches cleared")
+
+    @classmethod
+    def clear_cache_stats(cls):
+        """Reset cache statistics to zero"""
+        for key in cls._cache_stats:
+            cls._cache_stats[key] = 0
+        logger.info("Cache statistics reset")
+
     def _init_vector(self) -> BaseVector:
+        """Initialize vector processor with enhanced caching and double-check locking"""
         vector_type = dify_config.VECTOR_STORE
 
         if self._dataset.index_struct_dict:
@@ -65,8 +189,70 @@ class Vector:
         if not vector_type:
             raise ValueError("Vector store must be specified.")
 
-        vector_factory_cls = self.get_vector_factory(vector_type)
-        return vector_factory_cls().init_vector(self._dataset, self._attributes, self._embeddings)
+        # Generate cache key
+        cache_key = self._generate_processor_cache_key(self._dataset.id, vector_type)
+
+        # First check: without lock (fast path for cache hits)
+        if cache_key in self._vector_processor_cache:
+            cached_processor, cached_time = self._vector_processor_cache[cache_key]
+            
+            # Check TTL expiration
+            if not self._is_cache_expired(cached_time):
+                # Cache hit - move to end (mark as recently used)
+                with self._vector_processor_lock:
+                    self._vector_processor_cache.move_to_end(cache_key)
+                    self._cache_stats["processor_hits"] += 1
+                
+                logger.info(
+                    f"Vector processor cache HIT for dataset_id={self._dataset.id}, "
+                    f"vector_type={vector_type}, age={time.time() - cached_time:.2f}s"
+                )
+                return cached_processor
+            else:
+                # Expired - remove from cache
+                with self._vector_processor_lock:
+                    del self._vector_processor_cache[cache_key]
+                    self._cache_stats["processor_expired"] += 1
+                logger.info(f"Vector processor cache EXPIRED for dataset_id={self._dataset.id}")
+
+        # Cache miss - initialize new processor
+        with self._vector_processor_lock:
+            # Double-check: another thread might have initialized it
+            if cache_key in self._vector_processor_cache:
+                cached_processor, cached_time = self._vector_processor_cache[cache_key]
+                if not self._is_cache_expired(cached_time):
+                    self._vector_processor_cache.move_to_end(cache_key)
+                    self._cache_stats["processor_hits"] += 1
+                    return cached_processor
+
+            # Record cache miss
+            self._cache_stats["processor_misses"] += 1
+            logger.info(f"Vector processor cache MISS for dataset_id={self._dataset.id}, initializing...")
+
+            # Clean up expired entries
+            self._cleanup_expired_processors()
+
+            # Initialize new processor
+            init_start = time.perf_counter()
+            vector_factory_cls = self.get_vector_factory(vector_type)
+            processor = vector_factory_cls().init_vector(self._dataset, self._attributes, self._embeddings)
+            init_duration = time.perf_counter() - init_start
+
+            logger.info(
+                f"Vector processor initialized for dataset_id={self._dataset.id} in {init_duration:.2f}s"
+            )
+
+            # Evict LRU if cache is full
+            if len(self._vector_processor_cache) >= self._CACHE_MAX_SIZE:
+                logger.warning(
+                    f"Vector processor cache full ({self._CACHE_MAX_SIZE}), evicting LRU entry"
+                )
+                self._evict_lru_processor()
+
+            # Store in cache with current timestamp
+            self._vector_processor_cache[cache_key] = (processor, time.time())
+
+            return processor
 
     @staticmethod
     def get_vector_factory(vector_type: str) -> type[AbstractVectorFactory]:
@@ -242,15 +428,88 @@ class Vector:
             redis_client.delete(collection_exist_cache_key)
 
     def _get_embeddings(self) -> Embeddings:
-        model_manager = ModelManager()
-
-        embedding_model = model_manager.get_model_instance(
-            tenant_id=self._dataset.tenant_id,
-            provider=self._dataset.embedding_model_provider,
-            model_type=ModelType.TEXT_EMBEDDING,
-            model=self._dataset.embedding_model,
+        """Get embedding model with enhanced caching and double-check locking"""
+        # Generate cache key
+        cache_key = self._generate_embedding_cache_key(
+            self._dataset.tenant_id,
+            self._dataset.embedding_model_provider,
+            self._dataset.embedding_model
         )
-        return CacheEmbedding(embedding_model)
+
+        # First check: without lock (fast path for cache hits)
+        if cache_key in self._embedding_model_cache:
+            cached_embeddings, cached_time = self._embedding_model_cache[cache_key]
+            
+            # Check TTL expiration
+            if not self._is_cache_expired(cached_time):
+                # Cache hit - move to end (mark as recently used)
+                with self._embedding_model_lock:
+                    self._embedding_model_cache.move_to_end(cache_key)
+                    self._cache_stats["embedding_hits"] += 1
+                
+                logger.info(
+                    f"Embedding model cache HIT for tenant_id={self._dataset.tenant_id}, "
+                    f"provider={self._dataset.embedding_model_provider}, "
+                    f"model={self._dataset.embedding_model}, age={time.time() - cached_time:.2f}s"
+                )
+                return cached_embeddings
+            else:
+                # Expired - remove from cache
+                with self._embedding_model_lock:
+                    del self._embedding_model_cache[cache_key]
+                    self._cache_stats["embedding_expired"] += 1
+                logger.info(
+                    f"Embedding model cache EXPIRED for tenant_id={self._dataset.tenant_id}"
+                )
+
+        # Cache miss - load new model
+        with self._embedding_model_lock:
+            # Double-check: another thread might have loaded it
+            if cache_key in self._embedding_model_cache:
+                cached_embeddings, cached_time = self._embedding_model_cache[cache_key]
+                if not self._is_cache_expired(cached_time):
+                    self._embedding_model_cache.move_to_end(cache_key)
+                    self._cache_stats["embedding_hits"] += 1
+                    return cached_embeddings
+
+            # Record cache miss
+            self._cache_stats["embedding_misses"] += 1
+            logger.info(
+                f"Embedding model cache MISS for tenant_id={self._dataset.tenant_id}, "
+                f"provider={self._dataset.embedding_model_provider}, "
+                f"model={self._dataset.embedding_model}, loading model..."
+            )
+
+            # Clean up expired entries
+            self._cleanup_expired_embeddings()
+
+            # Load new model
+            load_start = time.perf_counter()
+            model_manager = ModelManager()
+            embedding_model = model_manager.get_model_instance(
+                tenant_id=self._dataset.tenant_id,
+                provider=self._dataset.embedding_model_provider,
+                model_type=ModelType.TEXT_EMBEDDING,
+                model=self._dataset.embedding_model,
+            )
+            cached_embedding = CacheEmbedding(embedding_model)
+            load_duration = time.perf_counter() - load_start
+
+            logger.info(
+                f"Embedding model loaded for tenant_id={self._dataset.tenant_id} in {load_duration:.2f}s"
+            )
+
+            # Evict LRU if cache is full
+            if len(self._embedding_model_cache) >= self._CACHE_MAX_SIZE:
+                logger.warning(
+                    f"Embedding model cache full ({self._CACHE_MAX_SIZE}), evicting LRU entry"
+                )
+                self._evict_lru_embedding()
+
+            # Store in cache with current timestamp
+            self._embedding_model_cache[cache_key] = (cached_embedding, time.time())
+
+            return cached_embedding
 
     def _filter_duplicate_texts(self, texts: list[Document]) -> list[Document]:
         for text in texts.copy():
