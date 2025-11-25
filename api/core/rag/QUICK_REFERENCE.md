@@ -9,9 +9,13 @@
 from core.rag.datasource.vdb.vector_factory import Vector
 print(Vector.get_cache_stats())
 
-# Reranker缓存
+# Rerank Model缓存
 from core.rag.data_post_processor.data_post_processor import DataPostProcessor
 print(DataPostProcessor.get_cache_stats())
+
+# Weight Rerank Embedding缓存
+from core.rag.rerank.weight_rerank import WeightRerankRunner
+print(WeightRerankRunner.get_cache_stats())
 ```
 
 ### 清空缓存（调试用）
@@ -21,9 +25,13 @@ print(DataPostProcessor.get_cache_stats())
 Vector.clear_cache()
 Vector.clear_cache_stats()
 
-# Reranker  
+# Rerank Model
 DataPostProcessor.clear_cache()
 DataPostProcessor.clear_cache_stats()
+
+# Weight Rerank
+WeightRerankRunner.clear_cache()
+WeightRerankRunner.clear_cache_stats()
 ```
 
 ---
@@ -35,6 +43,7 @@ DataPostProcessor.clear_cache_stats()
 | **Embedding Model** | 90%+ | 30分钟 | 100个 |
 | **Vector Processor** | 90%+ | 30分钟 | 100个 |
 | **Rerank Model** | 85%+ | 30分钟 | 50个 |
+| **Weight Rerank Embedding** | 85%+ | 30分钟 | 50个 |
 
 ---
 
@@ -44,8 +53,8 @@ DataPostProcessor.clear_cache_stats()
 |------|--------|--------|------|
 | **Vector首次加载** | 15秒 | 2.06秒 | 87% ↓ |
 | **Vector缓存命中** | - | <0.001秒 | 99.99% ↓ |
-| **Rerank首次加载** | 3秒 | 3秒 | - |
-| **Rerank缓存命中** | 3秒 | <0.001秒 | 99.9% ↓ |
+| **Rerank Model加载** | 3秒 | <0.001秒 | 99.9% ↓ |
+| **Weight Rerank Embedding** | 2.5秒 | <0.001秒 | 99.9% ↓ |
 
 ---
 
@@ -57,8 +66,12 @@ DataPostProcessor.clear_cache_stats()
 - **测试**: `api/core/rag/datasource/vdb/test_vector_cache.py`
 
 ### Reranker缓存
-- **实现**: `api/core/rag/data_post_processor/data_post_processor.py`
-- **测试**: `api/core/rag/rerank/test_rerank_cache.py`
+- **Rerank Model**: `api/core/rag/data_post_processor/data_post_processor.py`
+- **Weight Rerank**: `api/core/rag/rerank/weight_rerank.py`
+- **Rerank Runner**: `api/core/rag/rerank/rerank_model.py`
+- **测试**: 
+  - `api/core/rag/rerank/test_rerank_cache.py`
+  - `api/core/rag/rerank/test_weight_rerank_cache.py`
 
 ---
 
@@ -67,13 +80,17 @@ DataPostProcessor.clear_cache_stats()
 ### 修改TTL
 
 ```python
-#  vector_factory.py
+# vector_factory.py
 class Vector:
     _CACHE_TTL_SECONDS = 3600  # 改为60分钟
 
 # data_post_processor.py
 class DataPostProcessor:
     _RERANK_MODEL_CACHE_TTL_SECONDS = 3600
+
+# weight_rerank.py
+class WeightRerankRunner:
+    _EMBEDDING_CACHE_TTL_SECONDS = 3600
 ```
 
 ### 修改缓存大小
@@ -86,6 +103,10 @@ class Vector:
 # data_post_processor.py
 class DataPostProcessor:
     _RERANK_MODEL_CACHE_MAX_SIZE = 100
+
+# weight_rerank.py
+class WeightRerankRunner:
+    _EMBEDDING_CACHE_MAX_SIZE = 100
 ```
 
 ---
@@ -98,8 +119,11 @@ cd api
 # Vector缓存测试
 python core/rag/datasource/vdb/test_vector_cache.py
 
-# Reranker缓存测试  
+# Rerank Model缓存测试
 python core/rag/rerank/test_rerank_cache.py
+
+# Weight Rerank Embedding缓存测试
+python core/rag/rerank/test_weight_rerank_cache.py
 ```
 
 ---
@@ -122,6 +146,7 @@ monitor.print_performance_report()  # 打印报告
 INFO - Embedding model cache HIT for tenant_id=xxx, age=120s
 INFO - Vector processor cache MISS, initializing...
 INFO - Vector processor initialized in 2.03s
+INFO - Weight rerank embedding cache HIT, age=85s
 WARNING - Cache full (100), evicting LRU entry
 ```
 
@@ -173,7 +198,7 @@ WARNING - Cache full (100), evicting LRU entry
 - 缩短`_CACHE_TTL_SECONDS`
 - 监控淘汰频率
 
-###问题：频繁淘汰
+### 问题：频繁淘汰
 
 **可能原因**:
 - 缓存大小不足
@@ -190,8 +215,10 @@ WARNING - Cache full (100), evicting LRU entry
 
 - [Vector缓存详细文档](./datasource/vdb/CACHE_OPTIMIZATION.md)
 - [Reranker优化分析](./rerank/RERANKER_OPTIMIZATION.md)
+- [P1优化完成总结](./rerank/P1优化完成总结.md)
 - [完整优化总结](./RAG性能优化总结.md)
 
 ---
 
-**最后更新**: 2025-11-25
+**最后更新**: 2025-11-25  
+**实测性能**: 总查询时间 **416ms** ⚡
