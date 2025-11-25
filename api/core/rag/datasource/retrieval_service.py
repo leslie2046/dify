@@ -49,7 +49,12 @@ class RetrievalService:
         if not query:
             return []
 
+        start_load = time.perf_counter()
         dataset = cls._get_dataset(dataset_id)
+        end_load = time.perf_counter()
+        if execution_metadata is not None:
+            execution_metadata['dataset_load_latency'] = end_load - start_load
+
         if not dataset:
             return []
 
@@ -247,12 +252,19 @@ class RetrievalService:
     ):
         with flask_app.app_context():
             try:
-                start = time.perf_counter()
                 dataset = cls._get_dataset(dataset_id)
                 if not dataset:
                     raise ValueError("dataset not found")
 
+                start_init = time.perf_counter()
                 vector = Vector(dataset=dataset)
+                end_init = time.perf_counter()
+                if execution_metadata is not None:
+                    execution_metadata["embedding_search_init_latency"] = end_init - start_init
+                    if hasattr(vector, 'init_latencies'):
+                        execution_metadata['embedding_model_init_latency'] = vector.init_latencies.get('embedding_model_init', 0)
+                        execution_metadata['embedding_vdb_init_latency'] = vector.init_latencies.get('vector_db_init', 0)
+
                 start = time.perf_counter()
                 documents = vector.search_by_vector(
                     query,
@@ -315,7 +327,14 @@ class RetrievalService:
                 if not dataset:
                     raise ValueError("dataset not found")
 
+                start_init = time.perf_counter()
                 vector_processor = Vector(dataset=dataset)
+                end_init = time.perf_counter()
+                if execution_metadata is not None:
+                    execution_metadata["full_text_search_init_latency"] = end_init - start_init
+                    if hasattr(vector_processor, 'init_latencies'):
+                        execution_metadata['full_text_model_init_latency'] = vector_processor.init_latencies.get('embedding_model_init', 0)
+                        execution_metadata['full_text_vdb_init_latency'] = vector_processor.init_latencies.get('vector_db_init', 0)
 
                 start = time.perf_counter()
                 documents = vector_processor.search_by_full_text(
