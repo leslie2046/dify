@@ -263,7 +263,6 @@ class RetrievalService:
                     execution_metadata["embedding_search_init_latency"] = end_init - start_init
                     if hasattr(vector, 'init_latencies'):
                         execution_metadata['embedding_model_init_latency'] = vector.init_latencies.get('embedding_model_init', 0)
-                        execution_metadata['embedding_vdb_init_latency'] = vector.init_latencies.get('vector_db_init', 0)
 
                 start = time.perf_counter()
                 documents = vector.search_by_vector(
@@ -334,7 +333,6 @@ class RetrievalService:
                     execution_metadata["full_text_search_init_latency"] = end_init - start_init
                     if hasattr(vector_processor, 'init_latencies'):
                         execution_metadata['full_text_model_init_latency'] = vector_processor.init_latencies.get('embedding_model_init', 0)
-                        execution_metadata['full_text_vdb_init_latency'] = vector_processor.init_latencies.get('vector_db_init', 0)
 
                 start = time.perf_counter()
                 documents = vector_processor.search_by_full_text(
