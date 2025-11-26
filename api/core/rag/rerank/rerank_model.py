@@ -18,30 +18,17 @@ class RerankModelRunner(BaseRerankRunner):
         """
         Run rerank model
         :param query: search query
-        :param documents: documents for reranking
+        :param documents: documents for reranking (should be already deduplicated)
         :param score_threshold: score threshold
         :param top_n: top n
         :param user: unique user id if needed
         :return:
         """
-        docs = []
-        doc_ids = set()
-        unique_documents = []
-        for document in documents:
-            if (
-                document.provider == "dify"
-                and document.metadata is not None
-                and document.metadata["doc_id"] not in doc_ids
-            ):
-                doc_ids.add(document.metadata["doc_id"])
-                docs.append(document.page_content)
-                unique_documents.append(document)
-            elif document.provider == "external":
-                if document not in unique_documents:
-                    docs.append(document.page_content)
-                    unique_documents.append(document)
-
-        documents = unique_documents
+        # Note: Deduplication is now handled by RetrievalService before reranking
+        # This simplifies the logic and avoids duplicate deduplication
+        
+        # Extract document content for reranking
+        docs = [doc.page_content for doc in documents]
 
         rerank_result = self.rerank_model_instance.invoke_rerank(
             query=query, docs=docs, score_threshold=score_threshold, top_n=top_n, user=user
