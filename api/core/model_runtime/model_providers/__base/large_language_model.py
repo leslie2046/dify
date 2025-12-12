@@ -261,6 +261,7 @@ class LargeLanguageModel(AIModel):
         usage = None
         system_fingerprint = None
         real_model = model
+        time_to_first_token = 0.0
 
         def _update_message_content(content: str | list[PromptMessageContentUnionTypes] | None):
             if not content:
@@ -274,6 +275,8 @@ class LargeLanguageModel(AIModel):
 
         try:
             for chunk in result:
+                if not time_to_first_token:
+                    time_to_first_token = time.perf_counter() - self.started_at
                 # Following https://github.com/langgenius/dify/issues/17799,
                 # we removed the prompt_messages from the chunk on the plugin daemon side.
                 # To ensure compatibility, we add the prompt_messages back here.
@@ -305,13 +308,25 @@ class LargeLanguageModel(AIModel):
             raise self._transform_invoke_error(e)
 
         assistant_message = AssistantPromptMessage(content=message_content)
+
+        final_usage = usage or LLMUsage.empty_usage()
+        total_latency = time.perf_counter() - self.started_at
+        if not final_usage.latency:
+            final_usage.latency = total_latency
+
+        if not final_usage.time_to_first_token and time_to_first_token > 0:
+            final_usage.time_to_first_token = time_to_first_token
+
+        if not final_usage.time_to_generate and final_usage.time_to_first_token:
+            final_usage.time_to_generate = final_usage.latency - final_usage.time_to_first_token
+
         self._trigger_after_invoke_callbacks(
             model=model,
             result=LLMResult(
                 model=real_model,
                 prompt_messages=prompt_messages,
                 message=assistant_message,
-                usage=usage or LLMUsage.empty_usage(),
+                usage=final_usage,
                 system_fingerprint=system_fingerprint,
             ),
             credentials=credentials,

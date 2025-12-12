@@ -8,6 +8,8 @@ export type MessageMore = {
   time: string
   tokens: number
   latency: number | string
+  ttft?: number | string
+  tokens_per_second?: number | string
 }
 
 export type FeedbackType = {

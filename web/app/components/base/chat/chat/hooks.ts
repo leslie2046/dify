@@ -318,6 +318,7 @@ export const useChat = (
 
       return player
     }
+
     ssePost(
       url,
       {
@@ -393,6 +394,8 @@ export const useChat = (
                 time: formatTime(newResponseItem.created_at, 'hh:mm A'),
                 tokens: newResponseItem.answer_tokens + newResponseItem.message_tokens,
                 latency: newResponseItem.provider_response_latency.toFixed(2),
+                ttft: newResponseItem.metadata?.usage?.time_to_first_token ? newResponseItem.metadata.usage.time_to_first_token.toFixed(3) : 0,
+                tokens_per_second: newResponseItem.provider_response_latency > 0 ? (newResponseItem.answer_tokens / newResponseItem.provider_response_latency).toFixed(2) : 0,
               },
               // for agent log
               conversationId: conversationId.current,
