@@ -29,20 +29,12 @@ const More: FC<MoreProps> = ({
             >
               {`${t('appLog.detail.tokenCost')} ${formatNumber(more.tokens)}`}
             </div>
-            {more.ttft && (
-              <div
-                className='mr-2 shrink-0 truncate'
-                title={`TTFT ${more.ttft}ms`}
-              >
-                {`TTFT ${more.ttft}ms`}
-              </div>
-            )}
             {more.tokens_per_second && (
               <div
                 className='mr-2 shrink-0 truncate'
-                title={`${more.tokens_per_second}t/s`}
+                title={`${more.tokens_per_second} tokens/s`}
               >
-                {`${more.tokens_per_second}t/s`}
+                {`${more.tokens_per_second} tokens/s`}
               </div>
             )}
             <div className='mr-2 shrink-0'>·</div>
