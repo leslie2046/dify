@@ -155,23 +155,26 @@ class BaseAgentRunner(AppRunner):
                 continue
 
             parameter_type = parameter.type.as_normal_type()
-            if parameter.type in {
-                ToolParameter.ToolParameterType.SYSTEM_FILES,
-                ToolParameter.ToolParameterType.FILE,
-                ToolParameter.ToolParameterType.FILES,
-            }:
+            if parameter.type == ToolParameter.ToolParameterType.SYSTEM_FILES:
                 continue
+            elif parameter.type == ToolParameter.ToolParameterType.FILE:
+                parameter_type = "string"
+            elif parameter.type == ToolParameter.ToolParameterType.FILES:
+                parameter_type = "array"
+
             enum = []
             if parameter.type == ToolParameter.ToolParameterType.SELECT:
                 enum = [option.value for option in parameter.options] if parameter.options else []
 
+            parameter_config = {
+                "type": parameter_type,
+                "description": parameter.llm_description or "",
+            }
+            if parameter.type == ToolParameter.ToolParameterType.FILES:
+                parameter_config["items"] = {"type": "string"}
+
             message_tool.parameters["properties"][parameter.name] = (
-                {
-                    "type": parameter_type,
-                    "description": parameter.llm_description or "",
-                }
-                if parameter.input_schema is None
-                else parameter.input_schema
+                parameter_config if parameter.input_schema is None else parameter.input_schema
             )
 
             if len(enum) > 0:
@@ -252,23 +255,26 @@ class BaseAgentRunner(AppRunner):
                 continue
 
             parameter_type = parameter.type.as_normal_type()
-            if parameter.type in {
-                ToolParameter.ToolParameterType.SYSTEM_FILES,
-                ToolParameter.ToolParameterType.FILE,
-                ToolParameter.ToolParameterType.FILES,
-            }:
+            if parameter.type == ToolParameter.ToolParameterType.SYSTEM_FILES:
                 continue
+            elif parameter.type == ToolParameter.ToolParameterType.FILE:
+                parameter_type = "string"
+            elif parameter.type == ToolParameter.ToolParameterType.FILES:
+                parameter_type = "array"
+
             enum = []
             if parameter.type == ToolParameter.ToolParameterType.SELECT:
                 enum = [option.value for option in parameter.options] if parameter.options else []
 
+            parameter_config = {
+                "type": parameter_type,
+                "description": parameter.llm_description or "",
+            }
+            if parameter.type == ToolParameter.ToolParameterType.FILES:
+                parameter_config["items"] = {"type": "string"}
+
             prompt_tool.parameters["properties"][parameter.name] = (
-                {
-                    "type": parameter_type,
-                    "description": parameter.llm_description or "",
-                }
-                if parameter.input_schema is None
-                else parameter.input_schema
+                parameter_config if parameter.input_schema is None else parameter.input_schema
             )
 
             if len(enum) > 0:

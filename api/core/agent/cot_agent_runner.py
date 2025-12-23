@@ -22,7 +22,8 @@ from core.prompt.agent_history_prompt_transform import AgentHistoryPromptTransfo
 from core.tools.__base.tool import Tool
 from core.tools.entities.tool_entities import ToolInvokeMeta
 from core.tools.tool_engine import ToolEngine
-from models.model import Message
+from extensions.ext_database import db
+from models.model import Message, MessageFile
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +323,11 @@ class CotAgentRunner(BaseAgentRunner, ABC):
             )
             # add message file ids
             message_file_ids.append(message_file_id)
+
+            # query file info
+            message_file = db.session.query(MessageFile).filter(MessageFile.id == message_file_id).first()
+            if message_file:
+                tool_invoke_response += f"\n\nfile_name: {message_file.upload_file.name}, file_id: {message_file.id}, file_type: {message_file.type}, file_url: {message_file.url}"
 
         return tool_invoke_response, tool_invoke_meta
 

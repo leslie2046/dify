@@ -35,6 +35,7 @@ from core.tools.workflow_as_tool.tool import WorkflowTool
 from extensions.ext_database import db
 from models.enums import CreatorUserRole
 from models.model import Message, MessageFile
+from factories import file_factory
 
 
 class ToolEngine:
@@ -74,6 +75,56 @@ class ToolEngine:
                     tool_parameters = json.loads(tool_parameters)
                 if not isinstance(tool_parameters, dict):
                     raise ValueError(f"tool_parameters should be a dict, but got a string: {tool_parameters}")
+
+        # convert file parameters
+        for parameter in tool.get_runtime_parameters():
+            if parameter.form != ToolParameter.ToolParameterForm.LLM:
+                continue
+
+            if parameter.name not in tool_parameters:
+                continue
+
+            if parameter.type == ToolParameter.ToolParameterType.FILE:
+                file_id = tool_parameters[parameter.name]
+                if not file_id:
+                    continue
+
+                message_file = (
+                    db.session.query(MessageFile)
+                    .filter(
+                        MessageFile.id == file_id,
+                        MessageFile.tenant_id == tenant_id,
+                    )
+                    .first()
+                )
+                if message_file:
+                    tool_parameters[parameter.name] = file_factory.build_from_message_file(
+                        message_file=message_file,
+                        tenant_id=tenant_id,
+                        config=None,
+                    )
+            elif parameter.type == ToolParameter.ToolParameterType.FILES:
+                file_ids = tool_parameters[parameter.name]
+                if not file_ids:
+                    continue
+
+                if not isinstance(file_ids, list):
+                    continue
+
+                message_files = (
+                    db.session.query(MessageFile)
+                    .filter(
+                        MessageFile.id.in_(file_ids),
+                        MessageFile.tenant_id == tenant_id,
+                    )
+                    .all()
+                )
+                if message_files:
+                    tool_parameters[parameter.name] = file_factory.build_from_message_files(
+                        message_files=message_files,
+                        tenant_id=tenant_id,
+                        config=None,
+                    )
 
         try:
             # hit the callback handler

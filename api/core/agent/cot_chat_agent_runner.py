@@ -1,7 +1,7 @@
 import json
 
 from core.agent.cot_agent_runner import CotAgentRunner
-from core.file import file_manager
+from core.file import FileAttribute, file_manager
 from core.model_runtime.entities import (
     AssistantPromptMessage,
     PromptMessage,
@@ -51,6 +51,7 @@ class CotChatAgentRunner(CotAgentRunner):
             image_detail_config = image_detail_config or ImagePromptMessageContent.DETAIL.LOW
 
             prompt_message_contents: list[PromptMessageContentUnionTypes] = []
+            files_info = []
             for file in self.files:
                 prompt_message_contents.append(
                     file_manager.to_prompt_message_content(
@@ -58,6 +59,20 @@ class CotChatAgentRunner(CotAgentRunner):
                         image_detail_config=image_detail_config,
                     )
                 )
+                try:
+                    file_name = file_manager.get_attr(file=file, attr=FileAttribute.NAME)
+                    file_id = file_manager.get_attr(file=file, attr=FileAttribute.RELATED_ID)
+                    file_type = file_manager.get_attr(file=file, attr=FileAttribute.TYPE)
+                    file_url = file_manager.get_attr(file=file, attr=FileAttribute.URL)
+
+                    files_info.append(
+                        f"file_name: {file_name}, file_id: {file_id}, file_type: {file_type}, file_url: {file_url}"
+                    )
+                except Exception:
+                    pass
+
+            if files_info:
+                query += "\n\nUser uploaded files:\n" + "\n".join(files_info)
             prompt_message_contents.append(TextPromptMessageContent(data=query))
 
             prompt_messages.append(UserPromptMessage(content=prompt_message_contents))

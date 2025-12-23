@@ -7,7 +7,7 @@ from typing import Any, Union
 from core.agent.base_agent_runner import BaseAgentRunner
 from core.app.apps.base_app_queue_manager import PublishFrom
 from core.app.entities.queue_entities import QueueAgentThoughtEvent, QueueMessageEndEvent, QueueMessageFileEvent
-from core.file import file_manager
+from core.file import FileAttribute, file_manager
 from core.model_runtime.entities import (
     AssistantPromptMessage,
     LLMResult,
@@ -25,7 +25,8 @@ from core.model_runtime.entities.message_entities import ImagePromptMessageConte
 from core.prompt.agent_history_prompt_transform import AgentHistoryPromptTransform
 from core.tools.entities.tool_entities import ToolInvokeMeta
 from core.tools.tool_engine import ToolEngine
-from models.model import Message
+from extensions.ext_database import db
+from models.model import Message, MessageFile
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +250,7 @@ class FunctionCallAgentRunner(BaseAgentRunner):
                         conversation_id=self.conversation.id,
                     )
                     # publish files
+                    files_info = []
                     for message_file_id in message_files:
                         # publish message file
                         self.queue_manager.publish(
@@ -256,6 +258,18 @@ class FunctionCallAgentRunner(BaseAgentRunner):
                         )
                         # add message file ids
                         message_file_ids.append(message_file_id)
+
+                        # query file info
+                        message_file = (
+                            db.session.query(MessageFile).filter(MessageFile.id == message_file_id).first()
+                        )
+                        if message_file:
+                            files_info.append(
+                                f"file_name: {message_file.upload_file.name}, file_id: {message_file.id}, file_type: {message_file.type}, file_url: {message_file.url}"
+                            )
+
+                    if files_info:
+                        tool_invoke_response += "\n\n" + "\n".join(files_info)
 
                     tool_response = {
                         "tool_call_id": tool_call_id,
@@ -408,6 +422,7 @@ class FunctionCallAgentRunner(BaseAgentRunner):
             image_detail_config = image_detail_config or ImagePromptMessageContent.DETAIL.LOW
 
             prompt_message_contents: list[PromptMessageContentUnionTypes] = []
+            files_info = []
             for file in self.files:
                 prompt_message_contents.append(
                     file_manager.to_prompt_message_content(
@@ -415,6 +430,22 @@ class FunctionCallAgentRunner(BaseAgentRunner):
                         image_detail_config=image_detail_config,
                     )
                 )
+
+                try:
+                    file_name = file_manager.get_attr(file=file, attr=FileAttribute.NAME)
+                    file_id = file_manager.get_attr(file=file, attr=FileAttribute.RELATED_ID)
+                    file_type = file_manager.get_attr(file=file, attr=FileAttribute.TYPE)
+                    file_url = file_manager.get_attr(file=file, attr=FileAttribute.URL)
+
+                    files_info.append(
+                        f"file_name: {file_name}, file_id: {file_id}, file_type: {file_type}, file_url: {file_url}"
+                    )
+                except Exception:
+                    pass
+
+            if files_info:
+                query += "\n\nUser uploaded files:\n" + "\n".join(files_info)
+
             prompt_message_contents.append(TextPromptMessageContent(data=query))
 
             prompt_messages.append(UserPromptMessage(content=prompt_message_contents))
