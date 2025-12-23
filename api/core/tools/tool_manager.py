@@ -1028,17 +1028,10 @@ class ToolManager:
 
         runtime_parameters = {}
         for parameter in parameters:
-            if (
-                parameter.type
-                in {
-                    ToolParameter.ToolParameterType.SYSTEM_FILES,
-                    ToolParameter.ToolParameterType.FILE,
-                    ToolParameter.ToolParameterType.FILES,
-                }
-                and parameter.required
-                and typ == "agent"
-            ):
-                raise ValueError(f"file type parameter {parameter.name} not supported in agent")
+            if parameter.type == ToolParameter.ToolParameterType.SYSTEM_FILES:
+                if typ == "agent":
+                    continue
+                # do nothing
             # save tool parameter to tool entity memory
             if parameter.form == ToolParameter.ToolParameterForm.FORM:
                 if variable_pool:
