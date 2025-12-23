@@ -34,8 +34,8 @@ from core.tools.utils.message_transformer import ToolFileMessageTransformer, saf
 from core.tools.workflow_as_tool.tool import WorkflowTool
 from extensions.ext_database import db
 from models.enums import CreatorUserRole
-from models.model import Message, MessageFile
-from factories import file_factory
+from core.file import File
+from models.model import Message, MessageFile, ToolFile, UploadFile
 
 
 class ToolEngine:
@@ -97,12 +97,64 @@ class ToolEngine:
                     )
                     .first()
                 )
+
                 if message_file:
-                    tool_parameters[parameter.name] = file_factory.build_from_message_file(
-                        message_file=message_file,
-                        tenant_id=tenant_id,
-                        config=None,
-                    )
+                    file_obj = None
+                    if message_file.transfer_method == FileTransferMethod.TOOL_FILE:
+                        tool_file = (
+                            db.session.query(ToolFile)
+                            .filter(
+                                ToolFile.id == message_file.upload_file_id,
+                                ToolFile.tenant_id == tenant_id,
+                            )
+                            .first()
+                        )
+                        if tool_file:
+                            file_obj = File(
+                                id=message_file.id,
+                                tenant_id=tenant_id,
+                                type=FileType(message_file.type),
+                                transfer_method=FileTransferMethod.TOOL_FILE,
+                                related_id=tool_file.id,
+                                filename=tool_file.name,
+                                extension=f".{tool_file.file_key.split('.')[-1]}"
+                                if "." in tool_file.file_key
+                                else ".bin",
+                                mime_type=tool_file.mimetype,
+                                size=tool_file.size,
+                                storage_key=tool_file.file_key,
+                                remote_url=tool_file.original_url,
+                            )
+                    elif message_file.transfer_method in [
+                        FileTransferMethod.LOCAL_FILE,
+                        FileTransferMethod.REMOTE_URL,
+                    ]:
+                        upload_file = (
+                            db.session.query(UploadFile)
+                            .filter(
+                                UploadFile.id == message_file.upload_file_id,
+                                UploadFile.tenant_id == tenant_id,
+                            )
+                            .first()
+                        )
+                        if upload_file:
+                            file_obj = File(
+                                id=message_file.id,
+                                tenant_id=tenant_id,
+                                type=FileType(message_file.type),
+                                transfer_method=message_file.transfer_method,
+                                related_id=upload_file.id,
+                                filename=upload_file.name,
+                                extension=f".{upload_file.extension}",
+                                mime_type=upload_file.mime_type,
+                                size=upload_file.size,
+                                storage_key=upload_file.key,
+                                remote_url=upload_file.source_url,
+                            )
+
+                    if file_obj:
+                        tool_parameters[parameter.name] = file_obj
+
             elif parameter.type == ToolParameter.ToolParameterType.FILES:
                 file_ids = tool_parameters[parameter.name]
                 if not file_ids:
@@ -119,12 +171,67 @@ class ToolEngine:
                     )
                     .all()
                 )
-                if message_files:
-                    tool_parameters[parameter.name] = file_factory.build_from_message_files(
-                        message_files=message_files,
-                        tenant_id=tenant_id,
-                        config=None,
-                    )
+
+                files_obj = []
+                for message_file in message_files:
+                    file_obj = None
+                    if message_file.transfer_method == FileTransferMethod.TOOL_FILE:
+                        tool_file = (
+                            db.session.query(ToolFile)
+                            .filter(
+                                ToolFile.id == message_file.upload_file_id,
+                                ToolFile.tenant_id == tenant_id,
+                            )
+                            .first()
+                        )
+                        if tool_file:
+                            file_obj = File(
+                                id=message_file.id,
+                                tenant_id=tenant_id,
+                                type=FileType(message_file.type),
+                                transfer_method=FileTransferMethod.TOOL_FILE,
+                                related_id=tool_file.id,
+                                filename=tool_file.name,
+                                extension=f".{tool_file.file_key.split('.')[-1]}"
+                                if "." in tool_file.file_key
+                                else ".bin",
+                                mime_type=tool_file.mimetype,
+                                size=tool_file.size,
+                                storage_key=tool_file.file_key,
+                                remote_url=tool_file.original_url,
+                            )
+                    elif message_file.transfer_method in [
+                        FileTransferMethod.LOCAL_FILE,
+                        FileTransferMethod.REMOTE_URL,
+                    ]:
+                        upload_file = (
+                            db.session.query(UploadFile)
+                            .filter(
+                                UploadFile.id == message_file.upload_file_id,
+                                UploadFile.tenant_id == tenant_id,
+                            )
+                            .first()
+                        )
+                        if upload_file:
+                            file_obj = File(
+                                id=message_file.id,
+                                tenant_id=tenant_id,
+                                type=FileType(message_file.type),
+                                transfer_method=message_file.transfer_method,
+                                related_id=upload_file.id,
+                                filename=upload_file.name,
+                                extension=f".{upload_file.extension}",
+                                mime_type=upload_file.mime_type,
+                                size=upload_file.size,
+                                storage_key=upload_file.key,
+                                remote_url=upload_file.source_url,
+                            )
+                    
+                    if file_obj:
+                        files_obj.append(file_obj)
+
+                if files_obj:
+                    tool_parameters[parameter.name] = files_obj
 
         try:
             # hit the callback handler
