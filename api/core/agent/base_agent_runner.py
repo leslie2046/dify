@@ -16,7 +16,9 @@ from core.app.entities.app_invoke_entities import (
 )
 from core.callback_handler.agent_tool_callback_handler import DifyAgentCallbackHandler
 from core.callback_handler.index_tool_callback_handler import DatasetIndexToolCallbackHandler
+from core.callback_handler.index_tool_callback_handler import DatasetIndexToolCallbackHandler
 from core.file import file_manager
+from core.file.enums import FileType
 from core.memory.token_buffer_memory import TokenBufferMemory
 from core.model_manager import ModelInstance
 from core.model_runtime.entities import (
@@ -113,7 +115,18 @@ class BaseAgentRunner(AppRunner):
         model_schema = llm_model.get_model_schema(model_instance.model, model_instance.credentials)
         features = model_schema.features if model_schema and model_schema.features else []
         self.stream_tool_call = ModelFeature.STREAM_TOOL_CALL in features
-        self.files = application_generate_entity.files if ModelFeature.VISION in features else []
+        supported_features = set(features)
+        self.files = []
+        if application_generate_entity.files:
+            for file in application_generate_entity.files:
+                if file.type == FileType.IMAGE and ModelFeature.VISION in supported_features:
+                    self.files.append(file)
+                elif file.type == FileType.DOCUMENT and ModelFeature.DOCUMENT in supported_features:
+                    self.files.append(file)
+                elif file.type == FileType.VIDEO and ModelFeature.VIDEO in supported_features:
+                    self.files.append(file)
+                elif file.type == FileType.AUDIO and ModelFeature.AUDIO in supported_features:
+                    self.files.append(file)
         self.query: str | None = ""
         self._current_thoughts: list[PromptMessage] = []
 
