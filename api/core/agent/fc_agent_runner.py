@@ -8,6 +8,7 @@ from core.agent.base_agent_runner import BaseAgentRunner
 from core.app.apps.base_app_queue_manager import PublishFrom
 from core.app.entities.queue_entities import QueueAgentThoughtEvent, QueueMessageEndEvent, QueueMessageFileEvent
 from core.file import file_manager
+from core.file.models import File
 from core.model_runtime.entities import (
     AssistantPromptMessage,
     LLMResult,
@@ -395,6 +396,37 @@ class FunctionCallAgentRunner(BaseAgentRunner):
         """
         Organize user query
         """
+        inputs = self.application_generate_entity.inputs
+        for key, value in inputs.items():
+            try:
+                if isinstance(value, File):
+                    value = json.dumps(
+                        {
+                            "related_id": value.related_id,
+                            "filename": value.filename,
+                            "extension": value.extension,
+                            "mime_type": value.mime_type,
+                            "transfer_method": value.transfer_method,
+                        }
+                    )
+                    query += f"\n{value}"
+                elif isinstance(value, list) and all(isinstance(i, File) for i in value):
+                    value = json.dumps(
+                        [
+                            {
+                                "related_id": i.related_id,
+                                "filename": i.filename,
+                                "extension": i.extension,
+                                "mime_type": i.mime_type,
+                                "transfer_method": i.transfer_method,
+                            }
+                            for i in value
+                        ]
+                    )
+                    query += f"\n{value}"
+            except Exception:
+                continue
+
         if self.files:
             # get image detail config
             image_detail_config = (
@@ -448,6 +480,39 @@ class FunctionCallAgentRunner(BaseAgentRunner):
 
     def _organize_prompt_messages(self):
         prompt_template = self.app_config.prompt_template.simple_prompt_template or ""
+
+        inputs = self.application_generate_entity.inputs
+        for key, value in inputs.items():
+            try:
+                if isinstance(value, File):
+                    value = json.dumps(
+                        {
+                            "related_id": value.related_id,
+                            "filename": value.filename,
+                            "extension": value.extension,
+                            "mime_type": value.mime_type,
+                            "transfer_method": value.transfer_method,
+                        }
+                    )
+                elif isinstance(value, list) and all(isinstance(i, File) for i in value):
+                    value = json.dumps(
+                        [
+                            {
+                                "related_id": i.related_id,
+                                "filename": i.filename,
+                                "extension": i.extension,
+                                "mime_type": i.mime_type,
+                                "transfer_method": i.transfer_method,
+                            }
+                            for i in value
+                        ]
+                    )
+                else:
+                    value = str(value)
+                prompt_template = prompt_template.replace(f"{{{{{key}}}}}", value)
+            except Exception:
+                continue
+
         self.history_prompt_messages = self._init_system_message(prompt_template, self.history_prompt_messages)
         query_prompt_messages = self._organize_user_query(self.query or "", [])
 

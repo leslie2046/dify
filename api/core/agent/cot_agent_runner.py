@@ -22,6 +22,7 @@ from core.prompt.agent_history_prompt_transform import AgentHistoryPromptTransfo
 from core.tools.__base.tool import Tool
 from core.tools.entities.tool_entities import ToolInvokeMeta
 from core.tools.tool_engine import ToolEngine
+from core.file.models import File
 from models.model import Message
 
 logger = logging.getLogger(__name__)
@@ -337,7 +338,32 @@ class CotAgentRunner(BaseAgentRunner, ABC):
         """
         for key, value in inputs.items():
             try:
-                instruction = instruction.replace(f"{{{{{key}}}}}", str(value))
+                if isinstance(value, File):
+                    value = json.dumps(
+                        {
+                            "related_id": value.related_id,
+                            "filename": value.filename,
+                            "extension": value.extension,
+                            "mime_type": value.mime_type,
+                            "transfer_method": value.transfer_method,
+                        }
+                    )
+                elif isinstance(value, list) and all(isinstance(i, File) for i in value):
+                    value = json.dumps(
+                        [
+                            {
+                                "related_id": i.related_id,
+                                "filename": i.filename,
+                                "extension": i.extension,
+                                "mime_type": i.mime_type,
+                                "transfer_method": i.transfer_method,
+                            }
+                            for i in value
+                        ]
+                    )
+                else:
+                    value = str(value)
+                instruction = instruction.replace(f"{{{{{key}}}}}", value)
             except Exception:
                 continue
 

@@ -305,7 +305,11 @@ class ToolEngine:
         """
         runtime_parameters = tool.get_runtime_parameters()
         for parameter in runtime_parameters:
-            if parameter.type in {ToolParameter.ToolParameterType.FILE, ToolParameter.ToolParameterType.FILES}:
+            if parameter.type in {
+                ToolParameter.ToolParameterType.FILE,
+                ToolParameter.ToolParameterType.FILES,
+                ToolParameter.ToolParameterType.SYSTEM_FILES,
+            }:
                 if parameter.name in tool_parameters:
                     value = tool_parameters[parameter.name]
                     ToolEngine._logger().debug(
@@ -314,7 +318,10 @@ class ToolEngine:
                     if not value:
                         continue
 
-                    if parameter.type == ToolParameter.ToolParameterType.FILE:
+                    if parameter.type in {
+                        ToolParameter.ToolParameterType.FILE,
+                        ToolParameter.ToolParameterType.SYSTEM_FILES,
+                    }:
                         if isinstance(value, dict):
                             related_id = value.get("related_id")
                             transfer_method = value.get("transfer_method")
