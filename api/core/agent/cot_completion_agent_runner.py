@@ -109,6 +109,19 @@ class CotCompletionAgentRunner(CotAgentRunner):
             except Exception:
                 continue
 
+        files = self.application_generate_entity.files
+        if files:
+            file_descriptions = []
+            for file in files:
+                file_descriptions.append({
+                    "related_id": file.related_id,
+                    "filename": file.filename,
+                    "extension": file.extension,
+                    "mime_type": file.mime_type,
+                    "transfer_method": file.transfer_method,
+                })
+            query_prompt += f"\n{json.dumps(file_descriptions)}"
+
         # join all messages
         prompt = (
             system_prompt.replace("{{historic_messages}}", historic_prompt)
