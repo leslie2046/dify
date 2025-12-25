@@ -1101,7 +1101,7 @@ const Configuration: FC = () => {
             <NewFeaturePanel
               show
               inWorkflow={false}
-              showFileUpload={false}
+              showFileUpload={true}
               isChatMode={mode !== AppModeEnum.COMPLETION}
               disabled={false}
               onChange={handleFeaturesChange}
