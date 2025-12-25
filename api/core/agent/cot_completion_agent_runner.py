@@ -78,37 +78,6 @@ class CotCompletionAgentRunner(CotAgentRunner):
         # query messages
         query_prompt = f"Question: {self._query}"
 
-        inputs = self.application_generate_entity.inputs
-        for key, value in inputs.items():
-            try:
-                if isinstance(value, File):
-                    value = json.dumps(
-                        {
-                            "related_id": value.related_id,
-                            "filename": value.filename,
-                            "extension": value.extension,
-                            "mime_type": value.mime_type,
-                            "transfer_method": value.transfer_method,
-                        }
-                    )
-                    query_prompt += f"\n{value}"
-                elif isinstance(value, list) and all(isinstance(i, File) for i in value):
-                    value = json.dumps(
-                        [
-                            {
-                                "related_id": i.related_id,
-                                "filename": i.filename,
-                                "extension": i.extension,
-                                "mime_type": i.mime_type,
-                                "transfer_method": i.transfer_method,
-                            }
-                            for i in value
-                        ]
-                    )
-                    query_prompt += f"\n{value}"
-            except Exception:
-                continue
-
         files = self.application_generate_entity.files
         if files:
             file_descriptions = []

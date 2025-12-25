@@ -338,32 +338,7 @@ class CotAgentRunner(BaseAgentRunner, ABC):
         """
         for key, value in inputs.items():
             try:
-                if isinstance(value, File):
-                    value = json.dumps(
-                        {
-                            "related_id": value.related_id,
-                            "filename": value.filename,
-                            "extension": value.extension,
-                            "mime_type": value.mime_type,
-                            "transfer_method": value.transfer_method,
-                        }
-                    )
-                elif isinstance(value, list) and all(isinstance(i, File) for i in value):
-                    value = json.dumps(
-                        [
-                            {
-                                "related_id": i.related_id,
-                                "filename": i.filename,
-                                "extension": i.extension,
-                                "mime_type": i.mime_type,
-                                "transfer_method": i.transfer_method,
-                            }
-                            for i in value
-                        ]
-                    )
-                else:
-                    value = str(value)
-                instruction = instruction.replace(f"{{{{{key}}}}}", value)
+                instruction = instruction.replace(f"{{{{{key}}}}}", str(value))
             except Exception:
                 continue
 
