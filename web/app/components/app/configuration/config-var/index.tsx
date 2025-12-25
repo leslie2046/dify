@@ -64,23 +64,41 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
       label: currItem.name,
       variable: currItem.key,
       type: currItem.type === 'string' ? InputVarType.textInput : currItem.type,
+      ...(currItem.config || {}),
     } as InputVar
   })()
   const updatePromptVariableItem = (payload: InputVar) => {
     const newPromptVariables = produce(promptVariables, (draft) => {
       const { variable, label, type, ...rest } = payload
-      draft[currIndex] = {
-        ...rest,
-        type: type === InputVarType.textInput ? 'string' : type,
-        key: variable,
-        name: label as string,
+      if (type === InputVarType.singleFile || type === InputVarType.multiFiles) {
+        const { allowed_file_types, allowed_file_extensions, allowed_file_upload_methods, max_length, ...configRest } = rest as any
+        draft[currIndex] = {
+          ...configRest,
+          type: type as string,
+          key: variable,
+          name: label as string,
+          config: {
+            allowed_file_types: allowed_file_types || [],
+            allowed_file_extensions: allowed_file_extensions || [],
+            allowed_file_upload_methods: allowed_file_upload_methods || [],
+          },
+          max_length,
+        }
       }
+      else {
+        draft[currIndex] = {
+          ...rest,
+          type: type === InputVarType.textInput ? 'string' : type,
+          key: variable,
+          name: label as string,
+        }
 
-      if (payload.type === InputVarType.textInput)
-        draft[currIndex].max_length = draft[currIndex].max_length || DEFAULT_VALUE_MAX_LEN
+        if (payload.type === InputVarType.textInput)
+          draft[currIndex].max_length = draft[currIndex].max_length || DEFAULT_VALUE_MAX_LEN
 
-      if (payload.type !== InputVarType.select)
-        delete draft[currIndex].options
+        if (payload.type !== InputVarType.select)
+          delete draft[currIndex].options
+      }
     })
 
     const newList = newPromptVariables
@@ -216,7 +234,7 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
   const handleConfig = ({ key, type, index, name, config, icon, icon_background }: ExternalDataToolParams) => {
     // setCurrKey(key)
     setCurrIndex(index)
-    if (type !== 'string' && type !== 'paragraph' && type !== 'select' && type !== 'number' && type !== 'checkbox') {
+    if (type !== 'string' && type !== 'paragraph' && type !== 'select' && type !== 'number' && type !== 'checkbox' && type !== 'file' && type !== 'file-list') {
       handleOpenExternalDataToolModal({ key, type, index, name, config, icon, icon_background }, promptVariables)
       return
     }
@@ -301,6 +319,7 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
             hideEditModal()
           }}
           varKeys={promptVariables.map(v => v.key)}
+          supportFile={true}
         />
       )}
 

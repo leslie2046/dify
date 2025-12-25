@@ -11,6 +11,8 @@ _ALLOWED_VARIABLE_ENTITY_TYPE = frozenset(
         VariableEntityType.NUMBER,
         VariableEntityType.EXTERNAL_DATA_TOOL,
         VariableEntityType.CHECKBOX,
+        VariableEntityType.FILE,
+        VariableEntityType.FILE_LIST,
     ]
 )
 
@@ -59,6 +61,8 @@ class BasicVariablesConfigManager:
                 VariableEntityType.NUMBER,
                 VariableEntityType.SELECT,
                 VariableEntityType.CHECKBOX,
+                VariableEntityType.FILE,
+                VariableEntityType.FILE_LIST,
             }:
                 variable = variables[variable_type]
                 variable_entities.append(
@@ -70,6 +74,9 @@ class BasicVariablesConfigManager:
                         required=variable.get("required", False),
                         max_length=variable.get("max_length"),
                         options=variable.get("options") or [],
+                        allowed_file_types=variable.get("allowed_file_types") or [],
+                        allowed_file_extensions=variable.get("allowed_file_extensions") or [],
+                        allowed_file_upload_methods=variable.get("allowed_file_upload_methods") or [],
                     )
                 )
 
@@ -116,6 +123,8 @@ class BasicVariablesConfigManager:
                 VariableEntityType.NUMBER,
                 VariableEntityType.EXTERNAL_DATA_TOOL,
                 VariableEntityType.CHECKBOX,
+                VariableEntityType.FILE,
+                VariableEntityType.FILE_LIST,
             }:
                 allowed_keys = ", ".join(i.value for i in _ALLOWED_VARIABLE_ENTITY_TYPE)
                 raise ValueError(f"Keys in user_input_form list can only be {allowed_keys}")

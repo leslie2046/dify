@@ -1038,7 +1038,8 @@ class ToolManager:
                 and parameter.required
                 and typ == "agent"
             ):
-                raise ValueError(f"file type parameter {parameter.name} not supported in agent")
+                # file parameter is supported in agent now
+                pass
             # save tool parameter to tool entity memory
             if parameter.form == ToolParameter.ToolParameterForm.FORM:
                 if variable_pool:

@@ -33,11 +33,11 @@ const FileUploadSetting: FC<Props> = ({
   const { t } = useTranslation()
 
   const {
-    allowed_file_upload_methods,
-    max_length,
-    allowed_file_types,
-    allowed_file_extensions,
-  } = payload
+    allowed_file_upload_methods = [],
+    max_length = 5,
+    allowed_file_types = [],
+    allowed_file_extensions = [],
+  } = payload || {}
   const { data: fileUploadConfigResponse } = useFileUploadConfig()
   const {
     imgSizeLimit,
@@ -49,6 +49,9 @@ const FileUploadSetting: FC<Props> = ({
 
   const handleSupportFileTypeChange = useCallback((type: SupportUploadFileTypes) => {
     const newPayload = produce(payload, (draft) => {
+      if (!draft.allowed_file_types)
+        draft.allowed_file_types = []
+
       if (type === SupportUploadFileTypes.custom) {
         if (!draft.allowed_file_types.includes(SupportUploadFileTypes.custom))
           draft.allowed_file_types = [SupportUploadFileTypes.custom]
@@ -70,6 +73,9 @@ const FileUploadSetting: FC<Props> = ({
   const handleUploadMethodChange = useCallback((method: TransferMethod) => {
     return () => {
       const newPayload = produce(payload, (draft) => {
+        if (!draft.allowed_file_upload_methods)
+          draft.allowed_file_upload_methods = []
+
         if (method === TransferMethod.all)
           draft.allowed_file_upload_methods = [TransferMethod.local_file, TransferMethod.remote_url]
         else
@@ -81,6 +87,9 @@ const FileUploadSetting: FC<Props> = ({
 
   const handleCustomFileTypesChange = useCallback((customFileTypes: string[]) => {
     const newPayload = produce(payload, (draft) => {
+      if (!draft.allowed_file_extensions)
+        draft.allowed_file_extensions = []
+
       draft.allowed_file_extensions = customFileTypes.map((v) => {
         return v
       })

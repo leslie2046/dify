@@ -128,6 +128,28 @@ class BaseAgentRunner(AppRunner):
 
         return app_generate_entity
 
+    FILE_JSON_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "related_id": {
+                "type": "string",
+                "description": "File related_id, must be UUID format.",
+            },
+            "transfer_method": {
+                "type": "string",
+                "description": "File transfer method.",
+                "enum": [
+                    "remote_url",
+                    "local_file",
+                    "tool_file",
+                    "datasource_file",
+                ],
+            },
+        },
+        "required": ["related_id", "transfer_method"],
+    }
+
+
     def _convert_tool_to_prompt_message_tool(self, tool: AgentToolEntity) -> tuple[PromptMessageTool, Tool]:
         """
         convert tool to prompt message tool
@@ -155,12 +177,6 @@ class BaseAgentRunner(AppRunner):
                 continue
 
             parameter_type = parameter.type.as_normal_type()
-            if parameter.type in {
-                ToolParameter.ToolParameterType.SYSTEM_FILES,
-                ToolParameter.ToolParameterType.FILE,
-                ToolParameter.ToolParameterType.FILES,
-            }:
-                continue
             enum = []
             if parameter.type == ToolParameter.ToolParameterType.SELECT:
                 enum = [option.value for option in parameter.options] if parameter.options else []
@@ -173,6 +189,18 @@ class BaseAgentRunner(AppRunner):
                 if parameter.input_schema is None
                 else parameter.input_schema
             )
+
+            if parameter.type in {
+                ToolParameter.ToolParameterType.SYSTEM_FILES,
+                ToolParameter.ToolParameterType.FILE,
+            }:
+                message_tool.parameters["properties"][parameter.name] = self.FILE_JSON_SCHEMA
+            elif parameter.type == ToolParameter.ToolParameterType.FILES:
+                message_tool.parameters["properties"][parameter.name] = {
+                    "type": "array",
+                    "items": self.FILE_JSON_SCHEMA,
+                    "description": parameter.llm_description or "",
+                }
 
             if len(enum) > 0:
                 message_tool.parameters["properties"][parameter.name]["enum"] = enum
@@ -223,7 +251,6 @@ class BaseAgentRunner(AppRunner):
             try:
                 prompt_tool, tool_entity = self._convert_tool_to_prompt_message_tool(tool)
             except Exception:
-                # api tool may be deleted
                 continue
             # save tool entity
             tool_instances[tool.tool_name] = tool_entity
@@ -237,7 +264,8 @@ class BaseAgentRunner(AppRunner):
             prompt_messages_tools.append(prompt_tool)
             # save tool entity
             tool_instances[dataset_tool.entity.identity.name] = dataset_tool
-
+        logger.debug(f"[BaseAgentRunner] Tool instances: {tool_instances}")
+        logger.debug(f"[BaseAgentRunner] Prompt messages tools: {prompt_messages_tools}")
         return tool_instances, prompt_messages_tools
 
     def update_prompt_message_tool(self, tool: Tool, prompt_tool: PromptMessageTool) -> PromptMessageTool:
@@ -252,12 +280,6 @@ class BaseAgentRunner(AppRunner):
                 continue
 
             parameter_type = parameter.type.as_normal_type()
-            if parameter.type in {
-                ToolParameter.ToolParameterType.SYSTEM_FILES,
-                ToolParameter.ToolParameterType.FILE,
-                ToolParameter.ToolParameterType.FILES,
-            }:
-                continue
             enum = []
             if parameter.type == ToolParameter.ToolParameterType.SELECT:
                 enum = [option.value for option in parameter.options] if parameter.options else []
@@ -270,7 +292,19 @@ class BaseAgentRunner(AppRunner):
                 if parameter.input_schema is None
                 else parameter.input_schema
             )
-
+            if parameter.type in {
+                ToolParameter.ToolParameterType.SYSTEM_FILES,
+                ToolParameter.ToolParameterType.FILE,
+            }:
+                # for file, we should define the schema for it
+                prompt_tool.parameters["properties"][parameter.name] = self.FILE_JSON_SCHEMA
+            elif parameter.type == ToolParameter.ToolParameterType.FILES:
+                # for files, we should define the schema for it as an array
+                prompt_tool.parameters["properties"][parameter.name] = {
+                    "type": "array",
+                    "items": self.FILE_JSON_SCHEMA,
+                    "description": parameter.llm_description or "",
+                }
             if len(enum) > 0:
                 prompt_tool.parameters["properties"][parameter.name]["enum"] = enum
 

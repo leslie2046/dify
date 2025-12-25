@@ -28,6 +28,12 @@ const IconMap = (type: IInputTypeIconProps['type'], className: string) => {
     api: (
       <ApiConnection className={classNames} />
     ),
+    file: (
+      <InputVarTypeIcon type={InputVarType.singleFile} className={classNames} />
+    ),
+    'file-list': (
+      <InputVarTypeIcon type={InputVarType.multiFiles} className={classNames} />
+    ),
   }
 
   return icons[type]
