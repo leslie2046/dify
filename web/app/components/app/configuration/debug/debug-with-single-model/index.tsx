@@ -177,7 +177,7 @@ const DebugWithSingleModel = (
       chatContainerClassName="px-3 pt-6"
       chatFooterClassName="px-3 pt-10 pb-0"
       showFeatureBar
-      showFileUpload
+      showFileUpload={!!config.file_upload?.enabled}
       onFeatureBarClick={setShowAppConfigureFeaturesModal}
       suggestedQuestions={suggestedQuestions}
       onSend={doSend}
