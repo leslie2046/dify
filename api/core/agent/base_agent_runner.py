@@ -76,8 +76,16 @@ class BaseAgentRunner(AppRunner):
         self.message = message
         self.user_id = user_id
         self.memory = memory
-        self.history_prompt_messages = self.organize_agent_history(prompt_messages=prompt_messages or [])
         self.model_instance = model_instance
+
+        # check if model supports stream tool call (must be before organize_agent_history)
+        llm_model = cast(LargeLanguageModel, model_instance.model_type_instance)
+        model_schema = llm_model.get_model_schema(model_instance.model, model_instance.credentials)
+        features = model_schema.features if model_schema and model_schema.features else []
+        self.stream_tool_call = ModelFeature.STREAM_TOOL_CALL in features
+        self.features = set(features)
+
+        self.history_prompt_messages = self.organize_agent_history(prompt_messages=prompt_messages or [])
 
         # init callback
         self.agent_callback = DifyAgentCallbackHandler()
@@ -111,22 +119,16 @@ class BaseAgentRunner(AppRunner):
         )
         db.session.close()
 
-        # check if model supports stream tool call
-        llm_model = cast(LargeLanguageModel, model_instance.model_type_instance)
-        model_schema = llm_model.get_model_schema(model_instance.model, model_instance.credentials)
-        features = model_schema.features if model_schema and model_schema.features else []
-        self.stream_tool_call = ModelFeature.STREAM_TOOL_CALL in features
-        supported_features = set(features)
         self.files = []
         if application_generate_entity.files:
             for file in application_generate_entity.files:
-                if file.type == FileType.IMAGE and ModelFeature.VISION in supported_features:
+                if file.type == FileType.IMAGE and ModelFeature.VISION in self.features:
                     self.files.append(file)
-                elif file.type == FileType.DOCUMENT and ModelFeature.DOCUMENT in supported_features:
+                elif file.type == FileType.DOCUMENT and ModelFeature.DOCUMENT in self.features:
                     self.files.append(file)
-                elif file.type == FileType.VIDEO and ModelFeature.VIDEO in supported_features:
+                elif file.type == FileType.VIDEO and ModelFeature.VIDEO in self.features:
                     self.files.append(file)
-                elif file.type == FileType.AUDIO and ModelFeature.AUDIO in supported_features:
+                elif file.type == FileType.AUDIO and ModelFeature.AUDIO in self.features:
                     self.files.append(file)
         logger.info(f"1111111111111111111111 {self.files}")           
         self.query: str | None = ""
