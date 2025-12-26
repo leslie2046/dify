@@ -569,14 +569,40 @@ class BaseAgentRunner(AppRunner):
         )
         if not file_objs:
             return UserPromptMessage(content=message.query)
+
+        query = message.query
+        file_descriptions = []
+        for file in file_objs:
+            file_descriptions.append({
+                "related_id": file.related_id,
+                "filename": file.filename,
+                "extension": file.extension,
+                "mime_type": file.mime_type,
+                "transfer_method": file.transfer_method.value,
+            })
+        query += f"\n{json.dumps(file_descriptions)}"
+
         prompt_message_contents: list[PromptMessageContentUnionTypes] = []
         for file in file_objs:
+            if file.type == FileType.IMAGE and ModelFeature.VISION not in self.features:
+                continue
+            if file.type == FileType.DOCUMENT and ModelFeature.DOCUMENT not in self.features:
+                continue
+            if file.type == FileType.VIDEO and ModelFeature.VIDEO not in self.features:
+                continue
+            if file.type == FileType.AUDIO and ModelFeature.AUDIO not in self.features:
+                continue
+
             prompt_message_contents.append(
                 file_manager.to_prompt_message_content(
                     file,
                     image_detail_config=image_detail_config,
                 )
             )
-        prompt_message_contents.append(TextPromptMessageContent(data=message.query))
+
+        if not prompt_message_contents:
+            return UserPromptMessage(content=query)
+
+        prompt_message_contents.append(TextPromptMessageContent(data=query))
 
         return UserPromptMessage(content=prompt_message_contents)
