@@ -80,7 +80,7 @@ const DebugWithSingleModel = (
       text_to_speech: features.text2speech,
       file_upload: {
         ...fileConfig,
-        enabled: fileConfig?.enabled || hasVision || hasDocument || hasAudio || hasVideo,
+        enabled: fileConfig?.enabled,
         allowed_file_types: allowedFileTypes,
       },
       suggested_questions_after_answer: features.suggested,
