@@ -565,7 +565,7 @@ class BaseAgentRunner(AppRunner):
         image_detail_config = image_detail_config or ImagePromptMessageContent.DETAIL.LOW
 
         file_objs = file_factory.build_from_message_files(
-            message_files=files, tenant_id=self.tenant_id, config=file_extra_config
+            message_files=files, tenant_id=self.tenant_id, config=None
         )
         if not file_objs:
             return UserPromptMessage(content=message.query)
