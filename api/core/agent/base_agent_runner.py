@@ -17,6 +17,7 @@ from core.app.entities.app_invoke_entities import (
 from core.callback_handler.agent_tool_callback_handler import DifyAgentCallbackHandler
 from core.callback_handler.index_tool_callback_handler import DatasetIndexToolCallbackHandler
 from core.callback_handler.index_tool_callback_handler import DatasetIndexToolCallbackHandler
+from core.file.models import File
 from core.file import file_manager
 from core.file.enums import FileType
 from core.memory.token_buffer_memory import TokenBufferMemory
@@ -394,21 +395,26 @@ class BaseAgentRunner(AppRunner):
         if tool_name:
             agent_thought.tool = tool_name
 
+        def json_default(obj):
+            if isinstance(obj, File):
+                return obj.to_dict()
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
         if tool_input:
             if isinstance(tool_input, dict):
                 try:
-                    tool_input = json.dumps(tool_input, ensure_ascii=False)
+                    tool_input = json.dumps(tool_input, ensure_ascii=False, default=json_default)
                 except Exception:
-                    tool_input = json.dumps(tool_input)
+                    tool_input = json.dumps(tool_input, default=json_default)
 
             agent_thought.tool_input = tool_input
 
         if observation:
             if isinstance(observation, dict):
                 try:
-                    observation = json.dumps(observation, ensure_ascii=False)
+                    observation = json.dumps(observation, ensure_ascii=False, default=json_default)
                 except Exception:
-                    observation = json.dumps(observation)
+                    observation = json.dumps(observation, default=json_default)
 
             agent_thought.observation = observation
 
