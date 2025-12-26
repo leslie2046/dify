@@ -53,6 +53,7 @@ class CotChatAgentRunner(CotAgentRunner):
             query += f"\n{json.dumps(file_descriptions)}"
 
         if self.files:
+            logger.info(f"222222222222222222 {self.files}")    
             # get image detail config
             image_detail_config = (
                 self.application_generate_entity.file_upload_config.image_config.detail

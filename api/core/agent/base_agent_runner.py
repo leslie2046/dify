@@ -128,6 +128,7 @@ class BaseAgentRunner(AppRunner):
                     self.files.append(file)
                 elif file.type == FileType.AUDIO and ModelFeature.AUDIO in supported_features:
                     self.files.append(file)
+        logger.info(f"1111111111111111111111 {self.files}")           
         self.query: str | None = ""
         self._current_thoughts: list[PromptMessage] = []
 
