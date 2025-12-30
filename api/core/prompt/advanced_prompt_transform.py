@@ -97,7 +97,24 @@ class AdvancedPromptTransform(PromptTransform):
 
         if prompt_template.edition_type == "basic" or not prompt_template.edition_type:
             parser = PromptTemplateParser(template=raw_prompt, with_variable_tmpl=self.with_variable_tmpl)
-            prompt_inputs: Mapping[str, str] = {k: inputs[k] for k in parser.variable_keys if k in inputs}
+            
+            # Serialize File objects to JSON strings
+            processed_inputs = {}
+            for k, v in inputs.items():
+                if isinstance(v, File):
+                    processed_inputs[k] = json.dumps(
+                        {
+                            "related_id": v.related_id,
+                            "filename": v.filename,
+                            "extension": v.extension,
+                            "mime_type": v.mime_type,
+                            "transfer_method": v.transfer_method,
+                        }
+                    )
+                else:
+                    processed_inputs[k] = v
+            
+            prompt_inputs: Mapping[str, str] = {k: processed_inputs[k] for k in parser.variable_keys if k in processed_inputs}
 
             prompt_inputs = self._set_context_variable(context, parser, prompt_inputs)
 
@@ -166,14 +183,48 @@ class AdvancedPromptTransform(PromptTransform):
                     prompt = vp.convert_template(raw_prompt).text
                 else:
                     parser = PromptTemplateParser(template=raw_prompt, with_variable_tmpl=self.with_variable_tmpl)
-                    prompt_inputs: Mapping[str, str] = {k: inputs[k] for k in parser.variable_keys if k in inputs}
+                    
+                    # Serialize File objects to JSON strings
+                    processed_inputs = {}
+                    for k, v in inputs.items():
+                        if isinstance(v, File):
+                            processed_inputs[k] = json.dumps(
+                                {
+                                    "related_id": v.related_id,
+                                    "filename": v.filename,
+                                    "extension": v.extension,
+                                    "mime_type": v.mime_type,
+                                    "transfer_method": v.transfer_method,
+                                }
+                            )
+                        else:
+                            processed_inputs[k] = v
+                    
+                    prompt_inputs: Mapping[str, str] = {k: processed_inputs[k] for k in parser.variable_keys if k in processed_inputs}
                     prompt_inputs = self._set_context_variable(
                         context=context, parser=parser, prompt_inputs=prompt_inputs
                     )
                     prompt = parser.format(prompt_inputs)
             elif prompt_item.edition_type == "jinja2":
                 prompt = raw_prompt
-                prompt_inputs = inputs
+                
+                # Serialize File objects to JSON strings
+                processed_inputs = {}
+                for k, v in inputs.items():
+                    if isinstance(v, File):
+                        processed_inputs[k] = json.dumps(
+                            {
+                                "related_id": v.related_id,
+                                "filename": v.filename,
+                                "extension": v.extension,
+                                "mime_type": v.mime_type,
+                                "transfer_method": v.transfer_method,
+                            }
+                        )
+                    else:
+                        processed_inputs[k] = v
+                
+                prompt_inputs = processed_inputs
                 prompt = Jinja2Formatter.format(template=prompt, inputs=prompt_inputs)
             else:
                 raise ValueError(f"Invalid edition type: {prompt_item.edition_type}")

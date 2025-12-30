@@ -39,6 +39,8 @@ import { useProviderContext } from '@/context/provider-context'
 import { sendCompletionMessage } from '@/service/debug'
 import { AppModeEnum, ModelModeType, TransferMethod } from '@/types/app'
 import { formatBooleanInputs, promptVariablesToUserInputsForm } from '@/utils/model-config'
+import { getProcessedInputs } from '@/app/components/base/chat/chat/utils'
+import type { InputForm } from '@/app/components/base/chat/chat/type'
 import GroupName from '../base/group-name'
 import CannotQueryDataset from '../base/warning-mask/cannot-query-dataset'
 import FormattingChanged from '../base/warning-mask/formatting-changed'
@@ -258,7 +260,14 @@ const Debug: FC<IDebug> = ({
     }
 
     const data: Record<string, any> = {
-      inputs: formatBooleanInputs(modelConfig.configs.prompt_variables, inputs),
+      inputs: getProcessedInputs(
+        formatBooleanInputs(modelConfig.configs.prompt_variables, inputs) || {},
+        modelConfig.configs.prompt_variables.map(item => ({
+          ...item,
+          label: item.name,
+          variable: item.key,
+        })) as InputForm[],
+      ),
       model_config: postModelConfig,
     }
 
@@ -396,21 +405,21 @@ const Debug: FC<IDebug> = ({
             {
               debugWithMultipleModel
                 ? (
-                    <>
-                      <Button
-                        variant="ghost-accent"
-                        onClick={() => onMultipleModelConfigsChange(true, [...multipleModelConfigs, { id: `${Date.now()}`, model: '', provider: '', parameters: {} }])}
-                        disabled={multipleModelConfigs.length >= 4}
-                      >
-                        <RiAddLine className="mr-1 h-3.5 w-3.5" />
-                        {t('modelProvider.addModel', { ns: 'common' })}
-                        (
-                        {multipleModelConfigs.length}
-                        /4)
-                      </Button>
-                      <div className="mx-2 h-[14px] w-[1px] bg-divider-regular" />
-                    </>
-                  )
+                  <>
+                    <Button
+                      variant="ghost-accent"
+                      onClick={() => onMultipleModelConfigsChange(true, [...multipleModelConfigs, { id: `${Date.now()}`, model: '', provider: '', parameters: {} }])}
+                      disabled={multipleModelConfigs.length >= 4}
+                    >
+                      <RiAddLine className="mr-1 h-3.5 w-3.5" />
+                      {t('modelProvider.addModel', { ns: 'common' })}
+                      (
+                      {multipleModelConfigs.length}
+                      /4)
+                    </Button>
+                    <div className="mx-2 h-[14px] w-[1px] bg-divider-regular" />
+                  </>
+                )
                 : null
             }
             {mode !== AppModeEnum.COMPLETION && (

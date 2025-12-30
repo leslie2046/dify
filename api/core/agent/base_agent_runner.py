@@ -16,7 +16,10 @@ from core.app.entities.app_invoke_entities import (
 )
 from core.callback_handler.agent_tool_callback_handler import DifyAgentCallbackHandler
 from core.callback_handler.index_tool_callback_handler import DatasetIndexToolCallbackHandler
+from core.callback_handler.index_tool_callback_handler import DatasetIndexToolCallbackHandler
+from core.file.models import File
 from core.file import file_manager
+from core.file.enums import FileType
 from core.memory.token_buffer_memory import TokenBufferMemory
 from core.model_manager import ModelInstance
 from core.model_runtime.entities import (
@@ -73,8 +76,16 @@ class BaseAgentRunner(AppRunner):
         self.message = message
         self.user_id = user_id
         self.memory = memory
-        self.history_prompt_messages = self.organize_agent_history(prompt_messages=prompt_messages or [])
         self.model_instance = model_instance
+
+        # check if model supports stream tool call (must be before organize_agent_history)
+        llm_model = cast(LargeLanguageModel, model_instance.model_type_instance)
+        model_schema = llm_model.get_model_schema(model_instance.model, model_instance.credentials)
+        features = model_schema.features if model_schema and model_schema.features else []
+        self.stream_tool_call = ModelFeature.STREAM_TOOL_CALL in features
+        self.features = set(features)
+
+        self.history_prompt_messages = self.organize_agent_history(prompt_messages=prompt_messages or [])
 
         # init callback
         self.agent_callback = DifyAgentCallbackHandler()
@@ -108,12 +119,18 @@ class BaseAgentRunner(AppRunner):
         )
         db.session.close()
 
-        # check if model supports stream tool call
-        llm_model = cast(LargeLanguageModel, model_instance.model_type_instance)
-        model_schema = llm_model.get_model_schema(model_instance.model, model_instance.credentials)
-        features = model_schema.features if model_schema and model_schema.features else []
-        self.stream_tool_call = ModelFeature.STREAM_TOOL_CALL in features
-        self.files = application_generate_entity.files if ModelFeature.VISION in features else []
+        self.files = []
+        if application_generate_entity.files:
+            for file in application_generate_entity.files:
+                if file.type == FileType.IMAGE and ModelFeature.VISION in self.features:
+                    self.files.append(file)
+                elif file.type == FileType.DOCUMENT and ModelFeature.DOCUMENT in self.features:
+                    self.files.append(file)
+                elif file.type == FileType.VIDEO and ModelFeature.VIDEO in self.features:
+                    self.files.append(file)
+                elif file.type == FileType.AUDIO and ModelFeature.AUDIO in self.features:
+                    self.files.append(file)
+
         self.query: str | None = ""
         self._current_thoughts: list[PromptMessage] = []
 
@@ -127,6 +144,28 @@ class BaseAgentRunner(AppRunner):
             app_generate_entity.app_config.prompt_template.simple_prompt_template = ""
 
         return app_generate_entity
+
+    FILE_JSON_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "related_id": {
+                "type": "string",
+                "description": "File related_id, must be UUID format.",
+            },
+            "transfer_method": {
+                "type": "string",
+                "description": "File transfer method.",
+                "enum": [
+                    "remote_url",
+                    "local_file",
+                    "tool_file",
+                    "datasource_file",
+                ],
+            },
+        },
+        "required": ["related_id", "transfer_method"],
+    }
+
 
     def _convert_tool_to_prompt_message_tool(self, tool: AgentToolEntity) -> tuple[PromptMessageTool, Tool]:
         """
@@ -155,12 +194,6 @@ class BaseAgentRunner(AppRunner):
                 continue
 
             parameter_type = parameter.type.as_normal_type()
-            if parameter.type in {
-                ToolParameter.ToolParameterType.SYSTEM_FILES,
-                ToolParameter.ToolParameterType.FILE,
-                ToolParameter.ToolParameterType.FILES,
-            }:
-                continue
             enum = []
             if parameter.type == ToolParameter.ToolParameterType.SELECT:
                 enum = [option.value for option in parameter.options] if parameter.options else []
@@ -173,6 +206,18 @@ class BaseAgentRunner(AppRunner):
                 if parameter.input_schema is None
                 else parameter.input_schema
             )
+
+            if parameter.type in {
+                ToolParameter.ToolParameterType.SYSTEM_FILES,
+                ToolParameter.ToolParameterType.FILE,
+            }:
+                message_tool.parameters["properties"][parameter.name] = self.FILE_JSON_SCHEMA
+            elif parameter.type == ToolParameter.ToolParameterType.FILES:
+                message_tool.parameters["properties"][parameter.name] = {
+                    "type": "array",
+                    "items": self.FILE_JSON_SCHEMA,
+                    "description": parameter.llm_description or "",
+                }
 
             if len(enum) > 0:
                 message_tool.parameters["properties"][parameter.name]["enum"] = enum
@@ -223,7 +268,6 @@ class BaseAgentRunner(AppRunner):
             try:
                 prompt_tool, tool_entity = self._convert_tool_to_prompt_message_tool(tool)
             except Exception:
-                # api tool may be deleted
                 continue
             # save tool entity
             tool_instances[tool.tool_name] = tool_entity
@@ -237,7 +281,8 @@ class BaseAgentRunner(AppRunner):
             prompt_messages_tools.append(prompt_tool)
             # save tool entity
             tool_instances[dataset_tool.entity.identity.name] = dataset_tool
-
+        logger.debug(f"[BaseAgentRunner] Tool instances: {tool_instances}")
+        logger.debug(f"[BaseAgentRunner] Prompt messages tools: {prompt_messages_tools}")
         return tool_instances, prompt_messages_tools
 
     def update_prompt_message_tool(self, tool: Tool, prompt_tool: PromptMessageTool) -> PromptMessageTool:
@@ -252,12 +297,6 @@ class BaseAgentRunner(AppRunner):
                 continue
 
             parameter_type = parameter.type.as_normal_type()
-            if parameter.type in {
-                ToolParameter.ToolParameterType.SYSTEM_FILES,
-                ToolParameter.ToolParameterType.FILE,
-                ToolParameter.ToolParameterType.FILES,
-            }:
-                continue
             enum = []
             if parameter.type == ToolParameter.ToolParameterType.SELECT:
                 enum = [option.value for option in parameter.options] if parameter.options else []
@@ -270,7 +309,19 @@ class BaseAgentRunner(AppRunner):
                 if parameter.input_schema is None
                 else parameter.input_schema
             )
-
+            if parameter.type in {
+                ToolParameter.ToolParameterType.SYSTEM_FILES,
+                ToolParameter.ToolParameterType.FILE,
+            }:
+                # for file, we should define the schema for it
+                prompt_tool.parameters["properties"][parameter.name] = self.FILE_JSON_SCHEMA
+            elif parameter.type == ToolParameter.ToolParameterType.FILES:
+                # for files, we should define the schema for it as an array
+                prompt_tool.parameters["properties"][parameter.name] = {
+                    "type": "array",
+                    "items": self.FILE_JSON_SCHEMA,
+                    "description": parameter.llm_description or "",
+                }
             if len(enum) > 0:
                 prompt_tool.parameters["properties"][parameter.name]["enum"] = enum
 
@@ -347,21 +398,26 @@ class BaseAgentRunner(AppRunner):
         if tool_name:
             agent_thought.tool = tool_name
 
+        def json_default(obj):
+            if isinstance(obj, File):
+                return obj.to_dict()
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
         if tool_input:
             if isinstance(tool_input, dict):
                 try:
-                    tool_input = json.dumps(tool_input, ensure_ascii=False)
+                    tool_input = json.dumps(tool_input, ensure_ascii=False, default=json_default)
                 except Exception:
-                    tool_input = json.dumps(tool_input)
+                    tool_input = json.dumps(tool_input, default=json_default)
 
             agent_thought.tool_input = tool_input
 
         if observation:
             if isinstance(observation, dict):
                 try:
-                    observation = json.dumps(observation, ensure_ascii=False)
+                    observation = json.dumps(observation, ensure_ascii=False, default=json_default)
                 except Exception:
-                    observation = json.dumps(observation)
+                    observation = json.dumps(observation, default=json_default)
 
             agent_thought.observation = observation
 
@@ -511,18 +567,44 @@ class BaseAgentRunner(AppRunner):
         image_detail_config = image_detail_config or ImagePromptMessageContent.DETAIL.LOW
 
         file_objs = file_factory.build_from_message_files(
-            message_files=files, tenant_id=self.tenant_id, config=file_extra_config
+            message_files=files, tenant_id=self.tenant_id, config=None
         )
         if not file_objs:
             return UserPromptMessage(content=message.query)
+
+        query = message.query
+        file_descriptions = []
+        for file in file_objs:
+            file_descriptions.append({
+                "related_id": file.related_id,
+                "filename": file.filename,
+                "extension": file.extension,
+                "mime_type": file.mime_type,
+                "transfer_method": file.transfer_method.value,
+            })
+        query += f"\n{json.dumps(file_descriptions)}"
+
         prompt_message_contents: list[PromptMessageContentUnionTypes] = []
         for file in file_objs:
+            if file.type == FileType.IMAGE and ModelFeature.VISION not in self.features:
+                continue
+            if file.type == FileType.DOCUMENT and ModelFeature.DOCUMENT not in self.features:
+                continue
+            if file.type == FileType.VIDEO and ModelFeature.VIDEO not in self.features:
+                continue
+            if file.type == FileType.AUDIO and ModelFeature.AUDIO not in self.features:
+                continue
+
             prompt_message_contents.append(
                 file_manager.to_prompt_message_content(
                     file,
                     image_detail_config=image_detail_config,
                 )
             )
-        prompt_message_contents.append(TextPromptMessageContent(data=message.query))
+
+        if not prompt_message_contents:
+            return UserPromptMessage(content=query)
+
+        prompt_message_contents.append(TextPromptMessageContent(data=query))
 
         return UserPromptMessage(content=prompt_message_contents)

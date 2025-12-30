@@ -175,6 +175,21 @@ export const promptVariablesToUserInputsForm = (promptVariables: PromptVariable[
         },
       } as any)
     }
+    else if (item.type === 'file' || item.type === 'file-list') {
+      userInputs.push({
+        [item.type]: {
+          label: item.name,
+          variable: item.key,
+          required: item.required !== false, // default true
+          allowed_file_types: item.config?.allowed_file_types || [],
+          allowed_file_extensions: item.config?.allowed_file_extensions || [],
+          allowed_file_upload_methods: item.config?.allowed_file_upload_methods || [],
+          max_length: item.max_length,
+          default: item.default,
+          hide: item.hide,
+        },
+      } as any)
+    }
     else {
       userInputs.push({
         external_data_tool: {

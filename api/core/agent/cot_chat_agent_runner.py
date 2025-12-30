@@ -2,6 +2,7 @@ import json
 
 from core.agent.cot_agent_runner import CotAgentRunner
 from core.file import file_manager
+from core.file.models import File
 from core.model_runtime.entities import (
     AssistantPromptMessage,
     PromptMessage,
@@ -38,6 +39,19 @@ class CotChatAgentRunner(CotAgentRunner):
         """
         Organize user query
         """
+        files = self.application_generate_entity.files
+        if files:
+            file_descriptions = []
+            for file in files:
+                file_descriptions.append({
+                    "related_id": file.related_id,
+                    "filename": file.filename,
+                    "extension": file.extension,
+                    "mime_type": file.mime_type,
+                    "transfer_method": file.transfer_method,
+                })
+            query += f"\n{json.dumps(file_descriptions)}"
+
         if self.files:
             # get image detail config
             image_detail_config = (

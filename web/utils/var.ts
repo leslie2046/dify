@@ -8,11 +8,26 @@ import {
 } from '@/app/components/base/prompt-editor/constants'
 import { InputVarType } from '@/app/components/workflow/types'
 import { getMaxVarNameLength, MARKETPLACE_URL_PREFIX, MAX_VAR_KEY_LENGTH, VAR_ITEM_TEMPLATE, VAR_ITEM_TEMPLATE_IN_WORKFLOW } from '@/config'
+import { TransferMethod } from '@/types/app'
 
 const otherAllowedRegex = /^\w+$/
 
 export const getNewVar = (key: string, type: string) => {
   const { ...rest } = VAR_ITEM_TEMPLATE
+  if (type === 'file' || type === 'file-list') {
+    return {
+      ...rest,
+      type,
+      key,
+      name: key.slice(0, getMaxVarNameLength(key)),
+      config: {
+        allowed_file_types: [],
+        allowed_file_extensions: [],
+        allowed_file_upload_methods: [TransferMethod.local_file, TransferMethod.remote_url],
+      },
+    }
+  }
+
   if (type !== 'string') {
     return {
       ...rest,

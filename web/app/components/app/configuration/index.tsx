@@ -309,9 +309,9 @@ const Configuration: FC = () => {
       score_threshold,
       reranking_model: (reranking_model?.reranking_provider_name && reranking_model?.reranking_model_name)
         ? {
-            provider: reranking_model.reranking_provider_name,
-            model: reranking_model.reranking_model_name,
-          }
+          provider: reranking_model.reranking_provider_name,
+          model: reranking_model.reranking_model_name,
+        }
         : undefined,
       reranking_mode,
       weights,
@@ -576,7 +576,7 @@ const Configuration: FC = () => {
       // old dataset struct
       if (modelConfig.agent_mode?.tools?.find(({ dataset }: any) => dataset?.enabled))
         datasets = modelConfig.agent_mode?.tools.filter(({ dataset }: any) => dataset?.enabled)
-        // new dataset struct
+      // new dataset struct
       else if (modelConfig.dataset_configs.datasets?.datasets?.length > 0)
         datasets = modelConfig.dataset_configs?.datasets?.datasets
 
@@ -636,19 +636,19 @@ const Configuration: FC = () => {
                 ...(
                   modelConfig.external_data_tools?.length
                     ? modelConfig.external_data_tools.map((item: any) => {
-                        return {
-                          external_data_tool: {
-                            variable: item.variable as string,
-                            label: item.label as string,
-                            enabled: item.enabled,
-                            type: item.type as string,
-                            config: item.config,
-                            required: true,
-                            icon: item.icon,
-                            icon_background: item.icon_background,
-                          },
-                        }
-                      })
+                      return {
+                        external_data_tool: {
+                          variable: item.variable as string,
+                          label: item.label as string,
+                          enabled: item.enabled,
+                          type: item.type as string,
+                          config: item.config,
+                          required: true,
+                          icon: item.icon,
+                          icon_background: item.icon_background,
+                        },
+                      }
+                    })
                     : []
                 ),
               ]) as unknown as UserInputFormItem[],
@@ -683,9 +683,9 @@ const Configuration: FC = () => {
                 notAuthor: toolInCollectionList?.is_team_authorization === false,
                 ...(tool.provider_type === 'builtin'
                   ? {
-                      provider_id: correctToolProvider(tool.provider_name, !!toolInCollectionList),
-                      provider_name: correctToolProvider(tool.provider_name, !!toolInCollectionList),
-                    }
+                    provider_id: correctToolProvider(tool.provider_name, !!toolInCollectionList),
+                    provider_name: correctToolProvider(tool.provider_name, !!toolInCollectionList),
+                  }
                   : {}),
               }
             }),
@@ -715,11 +715,11 @@ const Configuration: FC = () => {
         ...retrievalConfig,
         ...(retrievalConfig.reranking_model
           ? {
-              reranking_model: {
-                reranking_model_name: retrievalConfig.reranking_model.model,
-                reranking_provider_name: correctModelProvider(retrievalConfig.reranking_model.provider),
-              },
-            }
+            reranking_model: {
+              reranking_model_name: retrievalConfig.reranking_model.model,
+              reranking_provider_name: correctModelProvider(retrievalConfig.reranking_model.provider),
+            },
+          }
           : {}),
       } as DatasetConfigs
       datasetConfigsToSet.retrieval_model = datasetConfigsToSet.retrieval_model ?? RETRIEVE_TYPE.multiWay
@@ -1101,7 +1101,7 @@ const Configuration: FC = () => {
             <NewFeaturePanel
               show
               inWorkflow={false}
-              showFileUpload={false}
+              showFileUpload={true}
               isChatMode={mode !== AppModeEnum.COMPLETION}
               disabled={false}
               onChange={handleFeaturesChange}

@@ -39,7 +39,7 @@ type ExternalDataToolParams = {
   icon_background?: string
 }
 
-const BASIC_INPUT_TYPES = new Set(['string', 'paragraph', 'select', 'number', 'checkbox'])
+const BASIC_INPUT_TYPES = new Set(['string', 'paragraph', 'select', 'number', 'checkbox', 'file', 'file-list'])
 
 const toInputVar = (item: PromptVariable): InputVar => ({
   ...item,
@@ -103,11 +103,35 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
   const currItemToEdit = useMemo(() => {
     if (!currItem)
       return null
-    return toInputVar(currItem)
+    return {
+      ...currItem,
+      label: currItem.name,
+      variable: currItem.key,
+      type: (currItem.type === 'string' ? InputVarType.textInput : currItem.type) as InputVarType,
+      ...(currItem.config || {}),
+    } as InputVar
   }, [currItem])
   const updatePromptVariableItem = useCallback((payload: InputVar) => {
     const newPromptVariables = produce(promptVariables, (draft) => {
-      draft[currIndex] = buildPromptVariableFromInput(payload)
+      const { variable, label, type, ...rest } = payload
+      if (type === InputVarType.singleFile || type === InputVarType.multiFiles) {
+        const { allowed_file_types, allowed_file_extensions, allowed_file_upload_methods, max_length, ...configRest } = rest as any
+        draft[currIndex] = {
+          ...configRest,
+          type: type as string,
+          key: variable,
+          name: label as string,
+          config: {
+            allowed_file_types: allowed_file_types || [],
+            allowed_file_extensions: allowed_file_extensions || [],
+            allowed_file_upload_methods: allowed_file_upload_methods || [],
+          },
+          max_length,
+        }
+      }
+      else {
+        draft[currIndex] = buildPromptVariableFromInput(payload)
+      }
     })
     const duplicateError = getDuplicateError(newPromptVariables)
     if (duplicateError) {
@@ -316,6 +340,7 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
             hideEditModal()
           }}
           varKeys={promptVariables.map(v => v.key)}
+          supportFile={true}
         />
       )}
 

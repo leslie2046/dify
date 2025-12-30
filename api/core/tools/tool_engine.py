@@ -1,5 +1,6 @@
 import contextlib
 import json
+import logging
 from collections.abc import Generator, Iterable
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -11,8 +12,9 @@ from yarl import URL
 from core.app.entities.app_invoke_entities import InvokeFrom
 from core.callback_handler.agent_tool_callback_handler import DifyAgentCallbackHandler
 from core.callback_handler.workflow_tool_callback_handler import DifyWorkflowCallbackHandler
-from core.file import FileType
+from core.file import File, FileType, file_manager
 from core.file.models import FileTransferMethod
+from factories import file_factory
 from core.ops.ops_trace_manager import TraceQueueManager
 from core.tools.__base.tool import Tool
 from core.tools.entities.tool_entities import (
@@ -41,6 +43,10 @@ class ToolEngine:
     """
     Tool runtime engine take care of the tool executions.
     """
+
+    @staticmethod
+    def _logger():
+        return logging.getLogger(__name__)
 
     @staticmethod
     def agent_invoke(
@@ -78,6 +84,14 @@ class ToolEngine:
         try:
             # hit the callback handler
             agent_tool_callback.on_tool_start(tool_name=tool.entity.identity.name, tool_inputs=tool_parameters)
+
+            # reconstruct tool parameters
+            tool_parameters = ToolEngine._reconstruct_file_parameters(
+                tool=tool,
+                tool_parameters=tool_parameters,
+                user_id=user_id,
+                tenant_id=tenant_id,
+            )
 
             messages = ToolEngine._invoke(tool, tool_parameters, user_id, conversation_id, app_id, message_id)
             invocation_meta_dict: dict[str, ToolInvokeMeta] = {}
@@ -232,6 +246,7 @@ class ToolEngine:
         json_parts: list[str] = []
 
         for response in tool_response:
+
             if response.type == ToolInvokeMessage.MessageType.TEXT:
                 parts.append(cast(ToolInvokeMessage.TextMessage, response.message).text)
             elif response.type == ToolInvokeMessage.MessageType.LINK:
@@ -254,6 +269,39 @@ class ToolEngine:
                         ensure_ascii=False,
                     )
                 )
+            elif response.type == ToolInvokeMessage.MessageType.FILE:
+                if response.meta and "file" in response.meta:
+                    file = response.meta["file"]
+                    if isinstance(file, File):
+                        parts.append(
+                            json.dumps(
+                                {
+                                    "related_id": file.related_id,
+                                    "filename": file.filename,
+                                    "extension": file.extension,
+                                    "mime_type": file.mimetype,
+                                    "transfer_method": file.transfer_method,
+                                }
+                            )
+                        )
+            elif response.type in {
+                ToolInvokeMessage.MessageType.BLOB,
+                ToolInvokeMessage.MessageType.IMAGE,
+                ToolInvokeMessage.MessageType.BINARY_LINK,
+            }:
+                # for blob, image and links, we should convert it to a file identity for LLM
+                if isinstance(response.message, ToolInvokeMessage.TextMessage):
+                    message_text = response.message.text
+                else:
+                    message_text = str(response.message)
+                try:
+                    tool_file_id = message_text.split("/")[-1].split(".")[0]
+                    parts.append(json.dumps({
+                        "related_id": tool_file_id,
+                        "transfer_method": "tool_file",
+                        }, ensure_ascii=False))
+                except Exception:
+                    parts.append(message_text)
             else:
                 parts.append(str(response.message))
 
@@ -263,6 +311,76 @@ class ToolEngine:
             parts.extend(p for p in json_parts if p not in existing_parts)
 
         return "".join(parts)
+
+    @staticmethod
+    def _reconstruct_file_parameters(
+        tool: Tool,
+        tool_parameters: dict[str, Any],
+        user_id: str,
+        tenant_id: str,
+    ) -> dict[str, Any]:
+        """
+        Reconstruct file parameters
+        """
+        runtime_parameters = tool.get_runtime_parameters()
+        for parameter in runtime_parameters:
+            if parameter.type in {
+                ToolParameter.ToolParameterType.FILE,
+                ToolParameter.ToolParameterType.FILES,
+                ToolParameter.ToolParameterType.SYSTEM_FILES,
+            }:
+                if parameter.name in tool_parameters:
+                    value = tool_parameters[parameter.name]
+                    ToolEngine._logger().debug(
+                        f"[ToolEngine] Reconstructing parameter {parameter.name} of type {parameter.type}, value: {value}"
+                    )
+                    if not value:
+                        continue
+
+                    if parameter.type in {
+                        ToolParameter.ToolParameterType.FILE,
+                        ToolParameter.ToolParameterType.SYSTEM_FILES,
+                    }:
+                        if isinstance(value, dict):
+                            related_id = value.get("related_id")
+                            transfer_method = value.get("transfer_method")
+                            value_dict = cast(dict[str, Any], value)
+                            value_dict["related_id"] = related_id
+                            if value_dict["transfer_method"] == FileTransferMethod.TOOL_FILE:
+                                value_dict["tool_file_id"] = value_dict["related_id"]
+                            elif value_dict["transfer_method"] in [FileTransferMethod.LOCAL_FILE, FileTransferMethod.REMOTE_URL]:
+                                value_dict["upload_file_id"] = value_dict["related_id"]
+                            elif value_dict["transfer_method"] == FileTransferMethod.DATASOURCE_FILE:
+                                value_dict["datasource_file_id"] = value_dict["related_id"]
+                            file = file_factory.build_from_mapping(
+                                mapping=value_dict,
+                                tenant_id=tenant_id
+                            )
+                            if file:
+                                tool_parameters[parameter.name] = file
+                    elif parameter.type == ToolParameter.ToolParameterType.FILES:
+                        if isinstance(value, list):
+                            files = []
+                            for item in value:
+                                if isinstance(item, dict):
+                                    related_id = item.get("related_id")
+                                    item_dict = cast(dict[str, Any], item)
+                                    item_dict["related_id"] = related_id
+                                    if item_dict.get("transfer_method") == FileTransferMethod.TOOL_FILE:
+                                        item_dict["tool_file_id"] = item_dict["related_id"]
+                                    elif item_dict.get("transfer_method") in [
+                                        FileTransferMethod.LOCAL_FILE,
+                                        FileTransferMethod.REMOTE_URL,
+                                    ]:
+                                        item_dict["upload_file_id"] = item_dict["related_id"]
+                                    elif item_dict.get("transfer_method") == FileTransferMethod.DATASOURCE_FILE:
+                                        item_dict["datasource_file_id"] = item_dict["related_id"]
+                                    file = file_factory.build_from_mapping(mapping=item_dict, tenant_id=tenant_id)
+                                    if file:
+                                        files.append(file)
+                            tool_parameters[parameter.name] = files
+
+        return tool_parameters
 
     @staticmethod
     def _extract_tool_response_binary_and_text(

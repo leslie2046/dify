@@ -9,6 +9,7 @@ import { useChat } from '@/app/components/base/chat/chat/hooks'
 import { getLastAnswer, isValidGeneratedAnswer } from '@/app/components/base/chat/utils'
 import { useFeatures } from '@/app/components/base/features/hooks'
 import { ModelFeatureEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
+import { SupportUploadFileTypes } from '@/app/components/workflow/types'
 import { useAppContext } from '@/context/app-context'
 import { useDebugConfigurationContext } from '@/context/debug-configuration'
 import { useProviderContext } from '@/context/provider-context'
@@ -49,7 +50,26 @@ const DebugWithSingleModel = (
   const { textGenerationModelList } = useProviderContext()
   const features = useFeatures(s => s.features)
   const configTemplate = useConfigFromDebugContext()
+  const currentProvider = textGenerationModelList.find(item => item.provider === modelConfig.provider)
+  const currentModel = currentProvider?.models.find(model => model.model === modelConfig.model_id)
+
   const config = useMemo(() => {
+    const hasVision = currentModel?.features?.includes(ModelFeatureEnum.vision)
+    const hasDocument = currentModel?.features?.includes(ModelFeatureEnum.document)
+    const hasAudio = currentModel?.features?.includes(ModelFeatureEnum.audio)
+    const hasVideo = currentModel?.features?.includes(ModelFeatureEnum.video)
+
+    const fileConfig = features.file
+    const allowedFileTypes = [...(fileConfig?.allowed_file_types || [])]
+    if (hasVision && !allowedFileTypes.includes(SupportUploadFileTypes.image))
+      allowedFileTypes.push(SupportUploadFileTypes.image)
+    if (hasDocument && !allowedFileTypes.includes(SupportUploadFileTypes.document))
+      allowedFileTypes.push(SupportUploadFileTypes.document)
+    if (hasAudio && !allowedFileTypes.includes(SupportUploadFileTypes.audio))
+      allowedFileTypes.push(SupportUploadFileTypes.audio)
+    if (hasVideo && !allowedFileTypes.includes(SupportUploadFileTypes.video))
+      allowedFileTypes.push(SupportUploadFileTypes.video)
+
     return {
       ...configTemplate,
       more_like_this: features.moreLikeThis,
@@ -58,12 +78,16 @@ const DebugWithSingleModel = (
       sensitive_word_avoidance: features.moderation,
       speech_to_text: features.speech2text,
       text_to_speech: features.text2speech,
-      file_upload: features.file,
+      file_upload: {
+        ...fileConfig,
+        enabled: fileConfig?.enabled,
+        allowed_file_types: allowedFileTypes,
+      },
       suggested_questions_after_answer: features.suggested,
       retriever_resource: features.citation,
       annotation_reply: features.annotationReply,
     } as ChatConfig
-  }, [configTemplate, features])
+  }, [configTemplate, features, currentModel])
   const inputsForm = useMemo(() => {
     return modelConfig.configs.prompt_variables.filter(item => item.type !== 'api').map(item => ({ ...item, label: item.name, variable: item.key })) as InputForm[]
   }, [modelConfig.configs.prompt_variables])
@@ -92,9 +116,6 @@ const DebugWithSingleModel = (
   const doSend: OnSend = useCallback((message, files, isRegenerate = false, parentAnswer: ChatItem | null = null) => {
     if (checkCanSend && !checkCanSend())
       return
-    const currentProvider = textGenerationModelList.find(item => item.provider === modelConfig.provider)
-    const currentModel = currentProvider?.models.find(model => model.model === modelConfig.model_id)
-    const supportVision = currentModel?.features?.includes(ModelFeatureEnum.vision)
 
     const configData = {
       ...config,
@@ -113,7 +134,7 @@ const DebugWithSingleModel = (
       parent_message_id: (isRegenerate ? parentAnswer?.id : getLastAnswer(chatList)?.id) || null,
     }
 
-    if ((config.file_upload as any)?.enabled && files?.length && supportVision)
+    if ((config.file_upload as any)?.enabled && files?.length)
       data.files = files
 
     handleSend(
@@ -156,7 +177,7 @@ const DebugWithSingleModel = (
       chatContainerClassName="px-3 pt-6"
       chatFooterClassName="px-3 pt-10 pb-0"
       showFeatureBar
-      showFileUpload={false}
+      showFileUpload={!!config.file_upload?.enabled}
       onFeatureBarClick={setShowAppConfigureFeaturesModal}
       suggestedQuestions={suggestedQuestions}
       onSend={doSend}

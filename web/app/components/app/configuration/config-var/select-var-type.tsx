@@ -67,6 +67,8 @@ const SelectVarType: FC<Props> = ({
             <SelectItem type={InputVarType.select} value="select" text={t('variableConfig.select', { ns: 'appDebug' })} onClick={handleChange}></SelectItem>
             <SelectItem type={InputVarType.number} value="number" text={t('variableConfig.number', { ns: 'appDebug' })} onClick={handleChange}></SelectItem>
             <SelectItem type={InputVarType.checkbox} value="checkbox" text={t('variableConfig.checkbox', { ns: 'appDebug' })} onClick={handleChange}></SelectItem>
+            <SelectItem type={InputVarType.singleFile} value="file" text={t('variableConfig.single-file', { ns: 'appDebug' })} onClick={handleChange}></SelectItem>
+            <SelectItem type={InputVarType.multiFiles} value="file-list" text={t('variableConfig.multi-files', { ns: 'appDebug' })} onClick={handleChange}></SelectItem>
           </div>
           <div className="h-px border-t border-components-panel-border"></div>
           <div className="p-1">

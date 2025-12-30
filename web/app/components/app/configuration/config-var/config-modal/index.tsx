@@ -116,6 +116,15 @@ const ConfigModal: FC<IConfigModalProps> = ({
           [key]: value,
         }
 
+        if (key === 'type' && (value === InputVarType.singleFile || value === InputVarType.multiFiles)) {
+          if (!newPayload.allowed_file_types)
+            newPayload.allowed_file_types = []
+          if (!newPayload.allowed_file_upload_methods)
+            newPayload.allowed_file_upload_methods = [TransferMethod.local_file, TransferMethod.remote_url]
+          if (!newPayload.max_length)
+            newPayload.max_length = value === InputVarType.singleFile ? 1 : 5
+        }
+
         // Clear default value if modified options no longer include current default
         if (key === 'options' && prev.default) {
           const optionsArray = Array.isArray(value) ? value : []
@@ -165,21 +174,21 @@ const ConfigModal: FC<IConfigModalProps> = ({
     },
     ...(supportFile
       ? [
-          {
-            name: t('variableConfig.single-file', { ns: 'appDebug' }),
-            value: InputVarType.singleFile,
-          },
-          {
-            name: t('variableConfig.multi-files', { ns: 'appDebug' }),
-            value: InputVarType.multiFiles,
-          },
-        ]
+        {
+          name: t('variableConfig.single-file', { ns: 'appDebug' }),
+          value: InputVarType.singleFile,
+        },
+        {
+          name: t('variableConfig.multi-files', { ns: 'appDebug' }),
+          value: InputVarType.multiFiles,
+        },
+      ]
       : []),
     ...((!isBasicApp && isSupportJSON)
       ? [{
-          name: t('variableConfig.json', { ns: 'appDebug' }),
-          value: InputVarType.jsonObject,
-        }]
+        name: t('variableConfig.json', { ns: 'appDebug' }),
+        value: InputVarType.jsonObject,
+      }]
       : []),
   ]
 
@@ -237,9 +246,9 @@ const ConfigModal: FC<IConfigModalProps> = ({
     const moreInfo = tempPayload.variable === payload?.variable
       ? undefined
       : {
-          type: ChangeType.changeVarName,
-          payload: { beforeKey: payload?.variable || '', afterKey: tempPayload.variable },
-        }
+        type: ChangeType.changeVarName,
+        payload: { beforeKey: payload?.variable || '', afterKey: tempPayload.variable },
+      }
 
     const isVariableNameValid = checkVariableName(tempPayload.variable)
     if (!isVariableNameValid)
