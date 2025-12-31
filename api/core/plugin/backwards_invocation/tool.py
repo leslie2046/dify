@@ -33,6 +33,15 @@ class PluginToolBackwardsInvocation(BaseBackwardsInvocation):
             tool_runtime = ToolManager.get_tool_runtime_from_plugin(
                 tool_type, tenant_id, provider, tool_name, tool_parameters, credential_id
             )
+
+            # reconstruct file parameters for FILE/FILES/SYSTEM_FILES types
+            tool_parameters = ToolEngine._reconstruct_file_parameters(
+                tool=tool_runtime,
+                tool_parameters=tool_parameters,
+                user_id=user_id,
+                tenant_id=tenant_id,
+            )
+
             response = ToolEngine.generic_invoke(
                 tool_runtime, tool_parameters, user_id, DifyWorkflowCallbackHandler(), workflow_call_depth=1
             )
