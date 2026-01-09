@@ -96,7 +96,7 @@ class WebAppAuthModel(BaseModel):
 
 
 class KnowledgePipeline(BaseModel):
-    publish_enabled: bool = False
+    publish_enabled: bool = True
 
 
 class PluginInstallationScope(StrEnum):

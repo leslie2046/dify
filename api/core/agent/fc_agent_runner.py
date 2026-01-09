@@ -202,8 +202,6 @@ class FunctionCallAgentRunner(BaseAgentRunner):
                     for tool_call in tool_calls
                 ]
 
-            logger.debug(f"FunctionCallAgentRunner: assistant_message: {assistant_message.model_dump()}")
-
             self._current_thoughts.append(assistant_message)
 
             # save thought
