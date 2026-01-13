@@ -189,7 +189,6 @@ class FunctionCallAgentRunner(BaseAgentRunner):
                 )
 
             assistant_message = AssistantPromptMessage(content=response, tool_calls=[])
-
             if tool_calls:
                 assistant_message.tool_calls = [
                     AssistantPromptMessage.ToolCall(
