@@ -8,6 +8,7 @@ import app from '../i18n/en-US/app.json'
 import billing from '../i18n/en-US/billing.json'
 import common from '../i18n/en-US/common.json'
 import custom from '../i18n/en-US/custom.json'
+import dashboard from '../i18n/en-US/dashboard.json'
 import datasetCreation from '../i18n/en-US/dataset-creation.json'
 import datasetDocuments from '../i18n/en-US/dataset-documents.json'
 import datasetHitTesting from '../i18n/en-US/dataset-hit-testing.json'
@@ -41,6 +42,7 @@ const resources = {
   billing,
   common,
   custom,
+  dashboard,
   dataset,
   datasetCreation,
   datasetDocuments,
@@ -66,8 +68,8 @@ const resources = {
 
 export type KebabCase<S extends string> = S extends `${infer T}${infer U}`
   ? T extends Lowercase<T>
-    ? `${T}${KebabCase<U>}`
-    : `-${Lowercase<T>}${KebabCase<U>}`
+  ? `${T}${KebabCase<U>}`
+  : `-${Lowercase<T>}${KebabCase<U>}`
   : S
 
 export type CamelCase<S extends string> = S extends `${infer T}-${infer U}`

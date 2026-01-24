@@ -262,6 +262,7 @@
   "menus.account": "Account",
   "menus.appDetail": "App Detail",
   "menus.apps": "Studio",
+  "menus.dashboard": "Dashboard",
   "menus.datasets": "Knowledge",
   "menus.datasetsTips": "COMING SOON: Import your own text data or write data in real-time via Webhook for LLM context enhancement.",
   "menus.explore": "Explore",

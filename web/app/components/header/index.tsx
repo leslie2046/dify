@@ -13,6 +13,7 @@ import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import { Plan } from '../billing/type'
 import AccountDropdown from './account-dropdown'
 import AppNav from './app-nav'
+import DashboardNav from './dashboard-nav'
 import DatasetNav from './dataset-nav'
 import EnvNav from './env-nav'
 import ExploreNav from './explore-nav'
@@ -49,12 +50,12 @@ const Header = () => {
         {isBrandingEnabled && systemFeatures.branding.application_title ? systemFeatures.branding.application_title : 'Dify'}
         {systemFeatures.branding.enabled && systemFeatures.branding.workspace_logo
           ? (
-              <img
-                src={systemFeatures.branding.workspace_logo}
-                className="block h-[22px] w-auto object-contain"
-                alt="logo"
-              />
-            )
+            <img
+              src={systemFeatures.branding.workspace_logo}
+              className="block h-[22px] w-auto object-contain"
+              alt="logo"
+            />
+          )
           : <DifyLogo />}
       </Link>
     </h1>
@@ -80,6 +81,7 @@ const Header = () => {
           </div>
         </div>
         <div className="my-1 flex items-center justify-center space-x-1">
+          {!isCurrentWorkspaceDatasetOperator && <DashboardNav className={navClassName} />}
           {!isCurrentWorkspaceDatasetOperator && <ExploreNav className={navClassName} />}
           {!isCurrentWorkspaceDatasetOperator && <AppNav />}
           {(isCurrentWorkspaceEditor || isCurrentWorkspaceDatasetOperator) && <DatasetNav />}
@@ -100,6 +102,7 @@ const Header = () => {
         {enableBilling ? <PlanBadge allowHover sandboxAsUpgrade plan={plan.type} onClick={handlePlanClick} /> : <LicenseNav />}
       </div>
       <div className="flex items-center space-x-2">
+        {!isCurrentWorkspaceDatasetOperator && <DashboardNav className={navClassName} />}
         {!isCurrentWorkspaceDatasetOperator && <ExploreNav className={navClassName} />}
         {!isCurrentWorkspaceDatasetOperator && <AppNav />}
         {(isCurrentWorkspaceEditor || isCurrentWorkspaceDatasetOperator) && <DatasetNav />}

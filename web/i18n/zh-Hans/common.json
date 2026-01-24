@@ -262,6 +262,7 @@
   "menus.account": "账户",
   "menus.appDetail": "应用详情",
   "menus.apps": "工作室",
+  "menus.dashboard": "仪表盘",
   "menus.datasets": "知识库",
   "menus.datasetsTips": "即将到来：上传自己的长文本数据，或通过 Webhook 集成自己的数据源",
   "menus.explore": "探索",

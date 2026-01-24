@@ -1,0 +1,47 @@
+{
+    "dashboard": {
+        "title": "仪表盘",
+        "description": "工作空间概览和数据分析",
+        "comingSoon": "即将推出",
+        "modulesInProgress": "仪表盘模块正在分阶段添加中",
+        "workspaceSummary": "工作空间概览",
+        "stats": {
+            "totalApps": "应用总数",
+            "totalMessages": "消息数",
+            "totalConversations": "会话数",
+            "totalUsers": "活跃用户",
+            "totalTokens": "Token 消耗",
+            "totalCost": "成本"
+        },
+        "charts": {
+            "messagesTrend": "消息趋势",
+            "conversationsTrend": "会话趋势",
+            "usersTrend": "活跃用户趋势",
+            "tokensTrend": "Token 使用趋势",
+            "total": "总计"
+        },
+        "costReports": {
+            "title": "费用报表",
+            "totalCost": "总成本",
+            "totalTokens": "总 Token 数",
+            "topApp": "消耗最高应用",
+            "ranking": "应用成本排名",
+            "noData": "所选时间段内无费用数据"
+        },
+        "appActivity": {
+            "title": "应用活跃度",
+            "sortBy": "排序",
+            "appName": "应用名称",
+            "type": "类型",
+            "status": "状态",
+            "trend": "趋势",
+            "action": "操作",
+            "enabled": "已启用",
+            "disabled": "未启用",
+            "noData": "暂无应用活跃数据"
+        }
+    },
+    "menus": {
+        "dashboard": "仪表盘"
+    }
+}
