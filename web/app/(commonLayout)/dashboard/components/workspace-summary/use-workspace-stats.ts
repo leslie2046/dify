@@ -32,17 +32,35 @@ export type WorkspaceStats = {
     }
 }
 
+import type { App } from '@/types/app'
+
 // Helper to fetch stats for a single app
-const fetchAppStats = async (appId: string, period: PeriodQuery) => {
-    console.log(`[Dashboard Debug] Requesting stats for app ${appId} with period:`, period)
-    const [messages, conversations, users, costs] = await Promise.all([
-        get<AppDailyMessagesResponse>(`/apps/${appId}/statistics/daily-messages`, { params: period }),
-        get<AppDailyConversationsResponse>(`/apps/${appId}/statistics/daily-conversations`, { params: period }),
-        get<AppDailyEndUsersResponse>(`/apps/${appId}/statistics/daily-end-users`, { params: period }),
-        get<AppTokenCostsResponse>(`/apps/${appId}/statistics/token-costs`, { params: period }),
-    ])
-    console.log(`[Dashboard Debug] Fetched stats for app ${appId}:`, { messages, conversations, users, costs })
-    return { appId, messages, conversations, users, costs }
+const fetchAppStats = async (app: App, period: PeriodQuery) => {
+    const isWorkflow = app.mode === 'workflow'
+    // Workflow uses different endpoints
+    const basePath = isWorkflow ? `/apps/${app.id}/workflow/statistics` : `/apps/${app.id}/statistics`
+
+    try {
+        if (isWorkflow) {
+            const [conversations, users, costs] = await Promise.all([
+                get<any>(`${basePath}/daily-conversations`, { params: period }), // Returns { runs }
+                get<any>(`${basePath}/daily-terminals`, { params: period }), // Returns { terminal_count }
+                get<AppTokenCostsResponse>(`${basePath}/token-costs`, { params: period }),
+            ])
+            return { app, isWorkflow, messages: null, conversations, users, costs }
+        } else {
+            const [messages, conversations, users, costs] = await Promise.all([
+                get<AppDailyMessagesResponse>(`${basePath}/daily-messages`, { params: period }),
+                get<AppDailyConversationsResponse>(`${basePath}/daily-conversations`, { params: period }),
+                get<AppDailyEndUsersResponse>(`${basePath}/daily-end-users`, { params: period }),
+                get<AppTokenCostsResponse>(`${basePath}/token-costs`, { params: period }),
+            ])
+            return { app, isWorkflow, messages, conversations, users, costs }
+        }
+    } catch (e) {
+        console.error(`Failed to fetch stats for app ${app.id}`, e)
+        return null
+    }
 }
 
 export function useWorkspaceStats(period: PeriodQuery) {
@@ -51,17 +69,15 @@ export function useWorkspaceStats(period: PeriodQuery) {
 
     const apps = useMemo(() => appsData?.data || [], [appsData])
 
-    // 2. Select top 5 apps to aggregate (browser performance limit)
-    // In a real production environment, this aggregation should happen on the backend
+    // 2. Select top 5 apps to aggregate
     const targetApps = useMemo(() => apps.slice(0, 5), [apps])
 
-    // 3. Parallel fetch data for these apps using useQueries
-    // We use useQueries to manually handle parallel execution better than hooks in loops
+    // 3. Parallel fetch data
     const results = useQueries({
         queries: targetApps.map(app => ({
             queryKey: ['dashboard', 'app-stats', app.id, period],
-            queryFn: () => fetchAppStats(app.id, period),
-            staleTime: 60000, // Cache for 1 minute
+            queryFn: () => fetchAppStats(app, period),
+            staleTime: 60000,
         })),
     })
 
@@ -85,7 +101,7 @@ export function useWorkspaceStats(period: PeriodQuery) {
 
         if (results.some(r => r.isLoading)) return defaultStats
 
-        // Maps to aggregate daily data: date -> total value
+        // Maps to aggregate daily data
         const dailyMap = {
             messages: new Map<string, number>(),
             conversations: new Map<string, number>(),
@@ -96,36 +112,63 @@ export function useWorkspaceStats(period: PeriodQuery) {
         results.forEach((result) => {
             if (!result.data) return
 
-            const { messages, conversations, users, costs } = result.data
+            const { isWorkflow, messages, conversations, users, costs } = result.data
 
-            // Aggregate Totals
-            messages.data.forEach((item) => {
-                defaultStats.totalMessages += item.message_count
-                const current = dailyMap.messages.get(item.date) || 0
-                dailyMap.messages.set(item.date, current + item.message_count)
-            })
+            // Aggregate Messages & Conversations
+            if (isWorkflow) {
+                // For workflows, 'conversations' endpoint returns 'runs'
+                conversations.data.forEach((item: any) => {
+                    const count = item.runs || 0
+                    // Treat runs as both messages and conversations for simplicity in dashboard
+                    defaultStats.totalMessages += count
+                    defaultStats.totalConversations += count
 
-            conversations.data.forEach((item) => {
-                defaultStats.totalConversations += item.conversation_count
-                const current = dailyMap.conversations.get(item.date) || 0
-                dailyMap.conversations.set(item.date, current + item.conversation_count)
-            })
+                    const currentMsg = dailyMap.messages.get(item.date) || 0
+                    dailyMap.messages.set(item.date, currentMsg + count)
 
-            users.data.forEach((item) => {
-                defaultStats.totalUsers += item.user_count
+                    const currentConv = dailyMap.conversations.get(item.date) || 0
+                    dailyMap.conversations.set(item.date, currentConv + count)
+                })
+            } else {
+                // Chat Apps
+                if (messages) {
+                    messages.data.forEach((item: any) => {
+                        const count = item.message_count || 0
+                        defaultStats.totalMessages += count
+                        const current = dailyMap.messages.get(item.date) || 0
+                        dailyMap.messages.set(item.date, current + count)
+                    })
+                }
+                if (conversations) {
+                    conversations.data.forEach((item: any) => {
+                        const count = item.conversation_count || 0
+                        defaultStats.totalConversations += count
+                        const current = dailyMap.conversations.get(item.date) || 0
+                        dailyMap.conversations.set(item.date, current + count)
+                    })
+                }
+            }
+
+            // Aggregate Users (terminal_count vs user_count)
+            // API usually returns 'terminal_count' for both now, but check types
+            users.data.forEach((item: any) => {
+                // Try both possible keys
+                const count = item.terminal_count || item.user_count || 0
+                defaultStats.totalUsers += count
                 const current = dailyMap.users.get(item.date) || 0
-                dailyMap.users.set(item.date, current + item.user_count)
+                dailyMap.users.set(item.date, current + count)
             })
 
-            costs.data.forEach((item) => {
+            // Aggregate Costs
+            costs.data.forEach((item: any) => {
                 defaultStats.totalCost += parseFloat(item.total_price || '0')
-                defaultStats.totalTokens += item.token_count
+                defaultStats.totalTokens += item.token_count || 0
                 const current = dailyMap.tokens.get(item.date) || 0
-                dailyMap.tokens.set(item.date, current + item.token_count)
+                dailyMap.tokens.set(item.date, current + (item.token_count || 0))
             })
         })
 
-        // Convert Maps to Arrays and Sort
+        // Sort timelines
         const sortTimeline = (map: Map<string, number>) =>
             Array.from(map.entries())
                 .map(([date, value]) => ({ date, value }))
