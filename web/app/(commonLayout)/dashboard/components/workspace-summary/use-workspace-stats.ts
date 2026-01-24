@@ -69,8 +69,8 @@ export function useWorkspaceStats(period: PeriodQuery) {
 
     const apps = useMemo(() => appsData?.data || [], [appsData])
 
-    // 2. Select top 5 apps to aggregate
-    const targetApps = useMemo(() => apps.slice(0, 5), [apps])
+    // 2. Select ALL apps to aggregate
+    const targetApps = useMemo(() => apps, [apps])
 
     // 3. Parallel fetch data
     const results = useQueries({
