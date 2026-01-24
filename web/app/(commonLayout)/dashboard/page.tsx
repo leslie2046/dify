@@ -31,17 +31,17 @@ const DashboardPage: FC = () => {
                 }
             case '7days':
                 return {
-                    start: today.subtract(6, 'day').startOf('day').format(queryDateFormat),
+                    start: today.subtract(7, 'day').startOf('day').format(queryDateFormat),
                     end: today.endOf('day').format(queryDateFormat),
                 }
             case '30days':
                 return {
-                    start: today.subtract(29, 'day').startOf('day').format(queryDateFormat),
+                    start: today.subtract(30, 'day').startOf('day').format(queryDateFormat),
                     end: today.endOf('day').format(queryDateFormat),
                 }
             default:
                 return {
-                    start: today.subtract(6, 'day').startOf('day').format(queryDateFormat),
+                    start: today.subtract(7, 'day').startOf('day').format(queryDateFormat),
                     end: today.endOf('day').format(queryDateFormat),
                 }
         }

@@ -34,6 +34,7 @@ export type WorkspaceStats = {
 
 // Helper to fetch stats for a single app
 const fetchAppStats = async (appId: string, period: PeriodQuery) => {
+    console.log(`[Dashboard Debug] Requesting stats for app ${appId} with period:`, period)
     const [messages, conversations, users, costs] = await Promise.all([
         get<AppDailyMessagesResponse>(`/apps/${appId}/statistics/daily-messages`, { params: period }),
         get<AppDailyConversationsResponse>(`/apps/${appId}/statistics/daily-conversations`, { params: period }),
