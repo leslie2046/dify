@@ -30,6 +30,15 @@ export type WorkspaceStats = {
         users: { date: string; value: number }[]
         tokens: { date: string; value: number }[]
     }
+    appStats: Array<{
+        id: string
+        name: string
+        messages: number
+        conversations: number
+        users: number
+        tokens: number
+        cost: number
+    }>
 }
 
 import type { App } from '@/types/app'
@@ -99,7 +108,7 @@ export function useWorkspaceStats(period: PeriodQuery) {
             },
         }
 
-        if (results.some(r => r.isLoading)) return defaultStats
+        if (results.some(r => r.isLoading)) return { ...defaultStats, appStats: [] } as any // Cast to any to satisfy type for initial return
 
         // Maps to aggregate daily data
         const dailyMap = {
@@ -109,19 +118,26 @@ export function useWorkspaceStats(period: PeriodQuery) {
             tokens: new Map<string, number>(),
         }
 
-        results.forEach((result) => {
-            if (!result.data) return
+        // Create per-app stats for ranking
+        const appStatsList: Array<{ id: string, name: string, messages: number, conversations: number, users: number, tokens: number, cost: number }> = []
 
+        results.forEach((result, index) => {
+            if (!result.data) return
+            const app = targetApps[index]
             const { isWorkflow, messages, conversations, users, costs } = result.data
+
+            let appMessages = 0
+            let appConversations = 0
+            let appUsers = 0
+            let appTokens = 0
+            let appCost = 0
 
             // Aggregate Messages & Conversations
             if (isWorkflow) {
-                // For workflows, 'conversations' endpoint returns 'runs'
                 conversations.data.forEach((item: any) => {
                     const count = item.runs || 0
-                    // Treat runs as both messages and conversations for simplicity in dashboard
-                    defaultStats.totalMessages += count
-                    defaultStats.totalConversations += count
+                    appMessages += count
+                    appConversations += count
 
                     const currentMsg = dailyMap.messages.get(item.date) || 0
                     dailyMap.messages.set(item.date, currentMsg + count)
@@ -130,11 +146,10 @@ export function useWorkspaceStats(period: PeriodQuery) {
                     dailyMap.conversations.set(item.date, currentConv + count)
                 })
             } else {
-                // Chat Apps
                 if (messages) {
                     messages.data.forEach((item: any) => {
                         const count = item.message_count || 0
-                        defaultStats.totalMessages += count
+                        appMessages += count
                         const current = dailyMap.messages.get(item.date) || 0
                         dailyMap.messages.set(item.date, current + count)
                     })
@@ -142,29 +157,46 @@ export function useWorkspaceStats(period: PeriodQuery) {
                 if (conversations) {
                     conversations.data.forEach((item: any) => {
                         const count = item.conversation_count || 0
-                        defaultStats.totalConversations += count
+                        appConversations += count
                         const current = dailyMap.conversations.get(item.date) || 0
                         dailyMap.conversations.set(item.date, current + count)
                     })
                 }
             }
 
-            // Aggregate Users (terminal_count vs user_count)
-            // API usually returns 'terminal_count' for both now, but check types
+            // Aggregate Users
             users.data.forEach((item: any) => {
-                // Try both possible keys
                 const count = item.terminal_count || item.user_count || 0
-                defaultStats.totalUsers += count
+                appUsers += count
                 const current = dailyMap.users.get(item.date) || 0
                 dailyMap.users.set(item.date, current + count)
             })
 
             // Aggregate Costs
             costs.data.forEach((item: any) => {
-                defaultStats.totalCost += parseFloat(item.total_price || '0')
-                defaultStats.totalTokens += item.token_count || 0
+                const price = parseFloat(item.total_price || '0')
+                const tokens = item.token_count || 0
+                appCost += price
+                appTokens += tokens
                 const current = dailyMap.tokens.get(item.date) || 0
-                dailyMap.tokens.set(item.date, current + (item.token_count || 0))
+                dailyMap.tokens.set(item.date, current + tokens)
+            })
+
+            // Add to totals
+            defaultStats.totalMessages += appMessages
+            defaultStats.totalConversations += appConversations
+            defaultStats.totalUsers += appUsers
+            defaultStats.totalTokens += appTokens
+            defaultStats.totalCost += appCost
+
+            appStatsList.push({
+                id: app.id,
+                name: app.name,
+                messages: appMessages,
+                conversations: appConversations,
+                users: appUsers,
+                tokens: appTokens,
+                cost: appCost
             })
         })
 
@@ -181,7 +213,7 @@ export function useWorkspaceStats(period: PeriodQuery) {
             tokens: sortTimeline(dailyMap.tokens),
         }
 
-        return defaultStats
+        return { ...defaultStats, appStats: appStatsList }
     }, [apps.length, results])
 
     const isLoading = appsLoading || results.some(r => r.isLoading)

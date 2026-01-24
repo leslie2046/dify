@@ -4,7 +4,9 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
 import { useAppFullList } from '@/service/use-apps'
+import { useWorkspaceStats } from '../workspace-summary/use-workspace-stats'
 import Loading from '@/app/components/base/loading'
+import AppIcon from '@/app/components/base/app-icon'
 
 export type AppActivityProps = {
     period: {
@@ -17,26 +19,42 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
     const { t } = useTranslation('dashboard')
     const router = useRouter()
 
-    const { data: appsData, isLoading } = useAppFullList()
+    const { data: appsData, isLoading: appsLoading } = useAppFullList()
+    const { data: stats, isLoading: statsLoading } = useWorkspaceStats(period)
 
     const apps = useMemo(() => {
-        if (!appsData?.data)
-            return []
+        if (!appsData?.data) return []
 
-        return appsData.data.slice(0, 10).map(app => ({
-            appId: app.id,
-            appName: app.name,
-            appMode: app.mode,
-            enabled: app.enable_site || app.enable_api,
-        }))
-    }, [appsData])
+        // Create a map of stats by appId for O(1) lookup
+        const statsMap = new Map(stats?.appStats?.map(s => [s.id, s]) || [])
+
+        // Merge app data with stats
+        const mergedApps = appsData.data.map(app => {
+            const stat = statsMap.get(app.id) || { messages: 0, conversations: 0, users: 0, cost: 0 }
+            return {
+                appId: app.id,
+                app, // Keep original app object for Icon
+                appName: app.name,
+                appMode: app.mode,
+                enabled: app.enable_site || app.enable_api,
+                // Stats
+                messages: stat.messages,
+                users: stat.users,
+                cost: stat.cost,
+            }
+        })
+
+        // Sort by Messages count descending
+        return mergedApps.sort((a, b) => b.messages - a.messages).slice(0, 10)
+    }, [appsData, stats])
 
     const handleAppClick = (appId: string) => {
         router.push(`/app/${appId}/overview`)
     }
 
-    if (isLoading)
-        return <Loading />
+    const isLoading = appsLoading || statsLoading
+
+    if (isLoading) return <Loading />
 
     if (apps.length === 0) {
         return (
@@ -45,8 +63,7 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                     🔥 {t('appActivity.title')}
                 </h2>
                 <div className="rounded-xl bg-components-panel-bg p-8 text-center shadow-xs">
-                    <div className="text-4xl">📱</div>
-                    <p className="mt-4 text-sm text-text-tertiary">
+                    <p className="text-sm text-text-tertiary">
                         {t('appActivity.noData')}
                     </p>
                 </div>
@@ -60,6 +77,9 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                 <h2 className="text-lg font-semibold text-text-primary">
                     🔥 {t('appActivity.title')}
                 </h2>
+                <span className="text-xs text-text-tertiary">
+                    {t('appActivity.sortBy')} {t('stats.totalMessages')}
+                </span>
             </div>
 
             <div className="overflow-x-auto rounded-xl bg-components-panel-bg shadow-xs">
@@ -70,55 +90,64 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                                 {t('appActivity.appName')}
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
-                                {t('appActivity.type')}
+                                {t('stats.totalMessages')}
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
+                                {t('stats.totalUsers')}
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
+                                {t('stats.totalCost')}
                             </th>
                             <th className="px-4 py-3 text-center text-xs font-medium text-text-tertiary">
                                 {t('appActivity.status')}
                             </th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-text-tertiary">
-                                {t('appActivity.action')}
-                            </th>
                         </tr>
                     </thead>
                     <tbody>
-                        {apps.map(app => (
+                        {apps.map(item => (
                             <tr
-                                key={app.appId}
+                                key={item.appId}
                                 className="cursor-pointer border-b border-divider-subtle transition-colors hover:bg-state-base-hover"
-                                onClick={() => handleAppClick(app.appId)}
+                                onClick={() => handleAppClick(item.appId)}
                             >
                                 <td className="px-4 py-3">
-                                    <div className="flex items-center">
-                                        <span className="mr-2 text-lg">
-                                            {app.appMode === 'chat' ? '💬' : app.appMode === 'workflow' ? '⚙️' : '📝'}
-                                        </span>
-                                        <span className="truncate text-sm font-medium text-text-primary">
-                                            {app.appName}
-                                        </span>
+                                    <div className="flex items-center gap-2">
+                                        <AppIcon
+                                            size="tiny"
+                                            icon={item.app.icon}
+                                            background={item.app.icon_background}
+                                        />
+                                        <div className="flex flex-col">
+                                            <span className="truncate text-sm font-medium text-text-primary">
+                                                {item.appName}
+                                            </span>
+                                            <span className="text-xs text-text-tertiary capitalize">
+                                                {item.appMode === 'workflow' ? 'Workflow' : 'Chat Bot'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </td>
-                                <td className="px-4 py-3">
-                                    <span className="text-sm text-text-secondary">
-                                        {app.appMode}
-                                    </span>
+                                <td className="px-4 py-3 text-sm text-text-secondary">
+                                    {item.messages.toLocaleString()}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-text-secondary">
+                                    {item.users.toLocaleString()}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-text-secondary">
+                                    ${item.cost.toFixed(4)}
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                    {app.enabled
+                                    {item.enabled
                                         ? (
                                             <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700">
-                                                ✓ {t('appActivity.enabled')}
+                                                {t('appActivity.enabled')}
                                             </span>
                                         )
                                         : (
-                                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                                                ○ {t('appActivity.disabled')}
+                                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                                                {t('appActivity.disabled')}
                                             </span>
                                         )}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                    <button className="text-sm text-blue-600 hover:text-blue-700">
-                                        →
-                                    </button>
                                 </td>
                             </tr>
                         ))}
