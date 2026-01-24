@@ -12,21 +12,12 @@ export type CostReportsProps = {
     }
 }
 
-type AppCost = {
-    appId: string
-    appName: string
-    totalCost: number
-    totalTokens: number
-    percentage: number
-}
-
 const CostReports: FC<CostReportsProps> = ({ period }) => {
-    const { t } = useTranslation()
+    const { t } = useTranslation('dashboard')
 
     const { data: appsData, isLoading: appsLoading } = useAppFullList()
     const apps = useMemo(() => (appsData?.data || []).slice(0, 10), [appsData])
 
-    // Get cost data for first app as example
     const firstAppId = apps[0]?.id
     const { data: costsData, isLoading: costsLoading } = useAppTokenCosts(
         firstAppId || '',
@@ -34,9 +25,8 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
     )
 
     const costSummary = useMemo(() => {
-        if (!costsData?.data || costsData.data.length === 0) {
+        if (!costsData?.data || costsData.data.length === 0)
             return null
-        }
 
         const totalCost = costsData.data.reduce(
             (sum, item) => sum + parseFloat(item.total_price || '0'),
@@ -63,12 +53,12 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
         return (
             <div className="mb-6">
                 <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                    💰 {t('dashboard.costReports.title')}
+                    💰 {t('costReports.title')}
                 </h2>
                 <div className="rounded-xl bg-components-panel-bg p-8 text-center shadow-xs">
                     <div className="text-4xl">📊</div>
                     <p className="mt-4 text-sm text-text-tertiary">
-                        {t('dashboard.costReports.noData')}
+                        {t('costReports.noData')}
                     </p>
                 </div>
             </div>
@@ -78,13 +68,13 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
     return (
         <div className="mb-6">
             <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                💰 {t('dashboard.costReports.title')}
+                💰 {t('costReports.title')}
             </h2>
 
             <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="rounded-xl bg-components-panel-bg p-4 shadow-xs">
                     <div className="text-xs text-text-tertiary">
-                        {t('dashboard.costReports.totalCost')}
+                        {t('costReports.totalCost')}
                     </div>
                     <div className="mt-1 text-2xl font-semibold text-text-primary">
                         ${costSummary.totalCost.toFixed(4)}
@@ -92,7 +82,7 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                 </div>
                 <div className="rounded-xl bg-components-panel-bg p-4 shadow-xs">
                     <div className="text-xs text-text-tertiary">
-                        {t('dashboard.costReports.totalTokens')}
+                        {t('costReports.totalTokens')}
                     </div>
                     <div className="mt-1 text-2xl font-semibold text-text-primary">
                         {(costSummary.totalTokens / 1000000).toFixed(2)}M
@@ -100,7 +90,7 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                 </div>
                 <div className="rounded-xl bg-components-panel-bg p-4 shadow-xs">
                     <div className="text-xs text-text-tertiary">
-                        {t('dashboard.costReports.topApp')}
+                        {t('costReports.topApp')}
                     </div>
                     <div className="mt-1 truncate text-lg font-semibold text-text-primary">
                         {costSummary.appName}
@@ -110,7 +100,7 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
 
             <div className="rounded-xl bg-components-panel-bg p-4 shadow-xs">
                 <h3 className="mb-4 text-sm font-medium text-text-secondary">
-                    {t('dashboard.costReports.ranking')}
+                    {t('costReports.ranking')}
                 </h3>
                 <div className="space-y-3">
                     <div className="flex items-center">

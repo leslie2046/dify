@@ -45,10 +45,10 @@ const DashboardPage: FC = () => {
         <div className="flex h-full flex-col overflow-y-auto p-6">
             <header className="mb-6">
                 <h1 className="system-xl-semibold text-text-primary">
-                    {t('dashboard.title')}
+                    {t('title')}
                 </h1>
                 <p className="system-sm-regular mt-1 text-text-tertiary">
-                    {t('dashboard.description')}
+                    {t('description')}
                 </p>
             </header>
 

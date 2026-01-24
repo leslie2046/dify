@@ -3,8 +3,7 @@ import type { FC } from 'react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
-import { RiArrowUpLine } from '@remixicon/react'
-import { useAppFullList, useAppDailyMessages } from '@/service/use-apps'
+import { useAppFullList } from '@/service/use-apps'
 import Loading from '@/app/components/base/loading'
 
 export type AppActivityProps = {
@@ -14,16 +13,8 @@ export type AppActivityProps = {
     }
 }
 
-type AppWithActivity = {
-    appId: string
-    appName: string
-    appMode: string
-    enabled: boolean
-    totalMessages: number
-}
-
 const AppActivity: FC<AppActivityProps> = ({ period }) => {
-    const { t } = useTranslation()
+    const { t } = useTranslation('dashboard')
     const router = useRouter()
 
     const { data: appsData, isLoading } = useAppFullList()
@@ -32,13 +23,11 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
         if (!appsData?.data)
             return []
 
-        // Show first 10 apps with basic info
         return appsData.data.slice(0, 10).map(app => ({
             appId: app.id,
             appName: app.name,
             appMode: app.mode,
             enabled: app.enable_site || app.enable_api,
-            totalMessages: 0, // TODO: Fetch real data for each app
         }))
     }, [appsData])
 
@@ -53,12 +42,12 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
         return (
             <div className="mb-6">
                 <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                    🔥 {t('dashboard.appActivity.title')}
+                    🔥 {t('appActivity.title')}
                 </h2>
                 <div className="rounded-xl bg-components-panel-bg p-8 text-center shadow-xs">
                     <div className="text-4xl">📱</div>
                     <p className="mt-4 text-sm text-text-tertiary">
-                        {t('dashboard.appActivity.noData')}
+                        {t('appActivity.noData')}
                     </p>
                 </div>
             </div>
@@ -69,7 +58,7 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
         <div className="mb-6">
             <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-text-primary">
-                    🔥 {t('dashboard.appActivity.title')}
+                    🔥 {t('appActivity.title')}
                 </h2>
             </div>
 
@@ -78,16 +67,16 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                     <thead>
                         <tr className="border-b border-divider-subtle">
                             <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
-                                {t('dashboard.appActivity.appName')}
+                                {t('appActivity.appName')}
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
-                                {t('dashboard.appActivity.type')}
+                                {t('appActivity.type')}
                             </th>
                             <th className="px-4 py-3 text-center text-xs font-medium text-text-tertiary">
-                                {t('dashboard.appActivity.status')}
+                                {t('appActivity.status')}
                             </th>
                             <th className="px-4 py-3 text-center text-xs font-medium text-text-tertiary">
-                                {t('dashboard.appActivity.action')}
+                                {t('appActivity.action')}
                             </th>
                         </tr>
                     </thead>
@@ -117,12 +106,12 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                                     {app.enabled
                                         ? (
                                             <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700">
-                                                ✓ {t('dashboard.appActivity.enabled')}
+                                                ✓ {t('appActivity.enabled')}
                                             </span>
                                         )
                                         : (
                                             <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                                                ○ {t('dashboard.appActivity.disabled')}
+                                                ○ {t('appActivity.disabled')}
                                             </span>
                                         )}
                                 </td>

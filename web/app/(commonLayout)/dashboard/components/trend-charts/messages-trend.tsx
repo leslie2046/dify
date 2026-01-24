@@ -24,13 +24,11 @@ const COLOR_CONFIG = {
 }
 
 const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
-    const { t } = useTranslation()
+    const { t } = useTranslation('dashboard')
 
-    // Get all apps
     const { data: appsData } = useAppFullList()
     const apps = useMemo(() => (appsData?.data || []).slice(0, 10), [appsData])
 
-    // Get data for first app as example
     const firstAppId = apps[0]?.id
     const { data: messagesData, isLoading } = useAppDailyMessages(
         firstAppId || '',
@@ -45,7 +43,6 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
             }))
         }
 
-        // Default empty data
         const days = 7
         return Array.from({ length: days }, (_, i) => ({
             date: dayjs().subtract(days - 1 - i, 'day').format('YYYY-MM-DD'),
@@ -77,7 +74,7 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
         },
         series: [
             {
-                name: t('dashboard.stats.totalMessages'),
+                name: t('stats.totalMessages'),
                 type: 'line',
                 data: chartData.map(item => item.message_count),
                 smooth: true,
@@ -107,11 +104,11 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
         <div className="flex flex-col rounded-xl bg-components-panel-bg p-4 shadow-xs">
             <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-text-secondary">
-                    📈 {t('dashboard.charts.messagesTrend')}
+                    📈 {t('charts.messagesTrend')}
                 </h3>
                 <div className="text-xs text-text-tertiary">
                     {apps.length > 0 && `${apps[0].name} - `}
-                    {t('dashboard.charts.total')}: {total.toLocaleString()}
+                    {t('charts.total')}: {total.toLocaleString()}
                 </div>
             </div>
             <ReactECharts option={options} style={{ height: 200 }} />

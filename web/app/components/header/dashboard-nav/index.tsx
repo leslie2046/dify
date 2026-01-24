@@ -9,7 +9,7 @@ type DashboardNavProps = {
 }
 
 const DashboardNav = ({ className }: DashboardNavProps) => {
-    const { t } = useTranslation()
+    const { t } = useTranslation('common')
     const selectedSegment = useSelectedLayoutSegment()
     const activated = selectedSegment === 'dashboard'
 
@@ -23,7 +23,7 @@ const DashboardNav = ({ className }: DashboardNavProps) => {
                     : 'text-components-main-nav-nav-button-text hover:bg-components-main-nav-nav-button-bg-hover hover:text-components-main-nav-nav-button-text-hover',
             )}
         >
-            {t('common.menus.dashboard')}
+            {t('menus.dashboard')}
         </Link>
     )
 }

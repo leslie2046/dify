@@ -13,7 +13,7 @@ export type WorkspaceSummaryProps = {
 }
 
 const WorkspaceSummary: FC<WorkspaceSummaryProps> = ({ period }) => {
-    const { t } = useTranslation()
+    const { t } = useTranslation('dashboard')
     const { data: stats, isLoading } = useWorkspaceStats(period)
 
     if (isLoading)
@@ -22,17 +22,17 @@ const WorkspaceSummary: FC<WorkspaceSummaryProps> = ({ period }) => {
     return (
         <div className="mb-6">
             <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                {t('dashboard.workspaceSummary')}
+                {t('workspaceSummary')}
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <StatCard
                     icon="📱"
-                    title={t('dashboard.stats.totalApps')}
+                    title={t('stats.totalApps')}
                     value={stats.totalApps}
                 />
                 <StatCard
                     icon="💬"
-                    title={t('dashboard.stats.totalMessages')}
+                    title={t('stats.totalMessages')}
                     value={stats.totalMessages}
                     change={{
                         value: stats.changes.messages,
@@ -41,7 +41,7 @@ const WorkspaceSummary: FC<WorkspaceSummaryProps> = ({ period }) => {
                 />
                 <StatCard
                     icon="💭"
-                    title={t('dashboard.stats.totalConversations')}
+                    title={t('stats.totalConversations')}
                     value={stats.totalConversations}
                     change={{
                         value: stats.changes.conversations,
@@ -50,7 +50,7 @@ const WorkspaceSummary: FC<WorkspaceSummaryProps> = ({ period }) => {
                 />
                 <StatCard
                     icon="👥"
-                    title={t('dashboard.stats.totalUsers')}
+                    title={t('stats.totalUsers')}
                     value={stats.totalUsers}
                     change={{
                         value: stats.changes.users,
@@ -59,7 +59,7 @@ const WorkspaceSummary: FC<WorkspaceSummaryProps> = ({ period }) => {
                 />
                 <StatCard
                     icon="🎯"
-                    title={t('dashboard.stats.totalTokens')}
+                    title={t('stats.totalTokens')}
                     value={`${(stats.totalTokens / 1000000).toFixed(1)}M`}
                     change={{
                         value: stats.changes.tokens,
@@ -68,7 +68,7 @@ const WorkspaceSummary: FC<WorkspaceSummaryProps> = ({ period }) => {
                 />
                 <StatCard
                     icon="💰"
-                    title={t('dashboard.stats.totalCost')}
+                    title={t('stats.totalCost')}
                     value={`$${stats.totalCost.toFixed(2)}`}
                     change={{
                         value: stats.changes.cost,

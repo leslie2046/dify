@@ -24,7 +24,7 @@ const COLOR_CONFIG = {
 }
 
 const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
-    const { t } = useTranslation()
+    const { t } = useTranslation('dashboard')
 
     const { data: appsData } = useAppFullList()
     const apps = useMemo(() => (appsData?.data || []).slice(0, 10), [appsData])
@@ -74,7 +74,7 @@ const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
         },
         series: [
             {
-                name: t('dashboard.stats.totalConversations'),
+                name: t('stats.totalConversations'),
                 type: 'line',
                 data: chartData.map(item => item.conversation_count),
                 smooth: true,
@@ -104,11 +104,11 @@ const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
         <div className="flex flex-col rounded-xl bg-components-panel-bg p-4 shadow-xs">
             <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-text-secondary">
-                    💭 {t('dashboard.charts.conversationsTrend')}
+                    💭 {t('charts.conversationsTrend')}
                 </h3>
                 <div className="text-xs text-text-tertiary">
                     {apps.length > 0 && `${apps[0].name} - `}
-                    {t('dashboard.charts.total')}: {total.toLocaleString()}
+                    {t('charts.total')}: {total.toLocaleString()}
                 </div>
             </div>
             <ReactECharts option={options} style={{ height: 200 }} />
