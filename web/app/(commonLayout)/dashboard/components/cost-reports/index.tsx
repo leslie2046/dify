@@ -1,8 +1,8 @@
 'use client'
 import type { FC } from 'react'
-import { useMemo } from 'react'
+import { ONE_DAY_MS } from '@/app/components/app/log/filter'
 import { useTranslation } from 'react-i18next'
-import { useAppFullList, useAppTokenCosts } from '@/service/use-apps'
+import { useWorkspaceStats } from '../workspace-summary/use-workspace-stats'
 import Loading from '@/app/components/base/loading'
 
 export type CostReportsProps = {
@@ -15,41 +15,13 @@ export type CostReportsProps = {
 const CostReports: FC<CostReportsProps> = ({ period }) => {
     const { t } = useTranslation('dashboard')
 
-    const { data: appsData, isLoading: appsLoading } = useAppFullList()
-    const apps = useMemo(() => (appsData?.data || []).slice(0, 10), [appsData])
-
-    const firstAppId = apps[0]?.id
-    const { data: costsData, isLoading: costsLoading } = useAppTokenCosts(
-        firstAppId || '',
-        { start: period.start, end: period.end },
-    )
-
-    const costSummary = useMemo(() => {
-        if (!costsData?.data || costsData.data.length === 0)
-            return null
-
-        const totalCost = costsData.data.reduce(
-            (sum, item) => sum + parseFloat(item.total_price || '0'),
-            0,
-        )
-        const totalTokens = costsData.data.reduce(
-            (sum, item) => sum + (item.token_count || 0),
-            0,
-        )
-
-        return {
-            totalCost,
-            totalTokens,
-            appName: apps[0]?.name || '',
-        }
-    }, [costsData, apps])
-
-    const isLoading = appsLoading || costsLoading
+    // Use the central stats hook which already aggregates costs correctly for all app types
+    const { data: stats, isLoading } = useWorkspaceStats(period)
 
     if (isLoading)
         return <Loading />
 
-    if (!costSummary || costSummary.totalCost === 0) {
+    if (!stats || stats.totalCost === 0) {
         return (
             <div className="mb-6">
                 <h2 className="mb-4 text-lg font-semibold text-text-primary">
@@ -65,6 +37,14 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
         )
     }
 
+    // Sort apps by cost desc
+    const topCostApps = (stats.appStats || [])
+        .sort((a, b) => b.cost - a.cost)
+        .slice(0, 5)
+        .filter(app => app.cost > 0)
+
+    const topApp = topCostApps[0]
+
     return (
         <div className="mb-6">
             <h2 className="mb-4 text-lg font-semibold text-text-primary">
@@ -77,7 +57,7 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                         {t('costReports.totalCost')}
                     </div>
                     <div className="mt-1 text-2xl font-semibold text-text-primary">
-                        ${costSummary.totalCost.toFixed(4)}
+                        ${stats.totalCost.toFixed(4)}
                     </div>
                 </div>
                 <div className="rounded-xl bg-components-panel-bg p-4 shadow-xs">
@@ -85,7 +65,7 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                         {t('costReports.totalTokens')}
                     </div>
                     <div className="mt-1 text-2xl font-semibold text-text-primary">
-                        {(costSummary.totalTokens / 1000000).toFixed(2)}M
+                        {(stats.totalTokens / 1000000).toFixed(2)}M
                     </div>
                 </div>
                 <div className="rounded-xl bg-components-panel-bg p-4 shadow-xs">
@@ -93,7 +73,7 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                         {t('costReports.topApp')}
                     </div>
                     <div className="mt-1 truncate text-lg font-semibold text-text-primary">
-                        {costSummary.appName}
+                        {topApp ? topApp.name : '-'}
                     </div>
                 </div>
             </div>
@@ -102,35 +82,42 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                 <h3 className="mb-4 text-sm font-medium text-text-secondary">
                     {t('costReports.ranking')}
                 </h3>
-                <div className="space-y-3">
-                    <div className="flex items-center">
-                        <div className="mr-3 w-6 text-center text-sm font-medium text-text-tertiary">
-                            #1
-                        </div>
-                        <div className="flex-1">
-                            <div className="mb-1 flex items-center justify-between">
-                                <span className="truncate text-sm font-medium text-text-primary">
-                                    {costSummary.appName}
-                                </span>
-                                <span className="ml-2 text-sm font-semibold text-orange-500">
-                                    ${costSummary.totalCost.toFixed(4)}
-                                </span>
-                            </div>
-                            <div className="flex items-center">
+                <div className="space-y-4">
+                    {topCostApps.map((app, index) => {
+                        const percentage = (app.cost / stats.totalCost) * 100
+                        return (
+                            <div key={app.id} className="flex items-center">
+                                <div className="mr-3 w-6 text-center text-sm font-medium text-text-tertiary">
+                                    #{index + 1}
+                                </div>
                                 <div className="flex-1">
-                                    <div className="h-2 overflow-hidden rounded-full bg-background-section">
-                                        <div
-                                            className="h-full rounded-full bg-orange-400"
-                                            style={{ width: '100%' }}
-                                        />
+                                    <div className="mb-1 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="truncate text-sm font-medium text-text-primary" title={app.name}>
+                                                {app.name}
+                                            </span>
+                                        </div>
+                                        <span className="ml-2 text-sm font-semibold text-orange-500">
+                                            ${app.cost.toFixed(4)}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <div className="flex-1">
+                                            <div className="h-2 overflow-hidden rounded-full bg-background-section">
+                                                <div
+                                                    className="h-full rounded-full bg-orange-400 transition-all duration-500"
+                                                    style={{ width: `${percentage}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <span className="ml-2 w-10 text-right text-xs text-text-tertiary">
+                                            {percentage.toFixed(0)}%
+                                        </span>
                                     </div>
                                 </div>
-                                <span className="ml-2 text-xs text-text-tertiary">
-                                    100%
-                                </span>
                             </div>
-                        </div>
-                    </div>
+                        )
+                    })}
                 </div>
             </div>
         </div>
