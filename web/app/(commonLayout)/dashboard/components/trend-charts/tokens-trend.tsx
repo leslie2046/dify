@@ -16,20 +16,20 @@ type TrendChartProps = {
 }
 
 const COLOR_CONFIG = {
-    lineColor: 'rgba(6, 148, 162, 1)',
-    bgColorStart: 'rgba(6, 148, 162, 0.2)',
-    bgColorEnd: 'rgba(67, 174, 185, 0.08)',
+    lineColor: 'rgba(234, 67, 53, 1)', // Red for Tokens
+    bgColorStart: 'rgba(234, 67, 53, 0.2)',
+    bgColorEnd: 'rgba(234, 67, 53, 0.05)',
     label: '#9CA3AF',
     splitLine: '#F3F4F6',
 }
 
-const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
+const TokensTrendChart: FC<TrendChartProps> = ({ period }) => {
     const { t } = useTranslation('dashboard')
     const { data: stats, isLoading } = useWorkspaceStats(period)
 
     const chartData = useMemo(() => {
-        if (stats.chartData.conversations.length > 0) {
-            return stats.chartData.conversations
+        if (stats.chartData.tokens.length > 0) {
+            return stats.chartData.tokens
         }
         const days = dayjs(period.end).diff(dayjs(period.start), 'day') + 1
         return Array.from({ length: days }, (_, i) => ({
@@ -54,7 +54,7 @@ const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
             splitLine: { lineStyle: { color: COLOR_CONFIG.splitLine } },
         },
         series: [{
-            name: t('stats.totalConversations'),
+            name: t('stats.totalTokens'),
             type: 'line',
             data: chartData.map(item => item.value),
             smooth: true,
@@ -78,10 +78,10 @@ const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
         <div className="flex flex-col rounded-xl bg-components-panel-bg p-4 shadow-xs">
             <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-text-secondary">
-                    💭 {t('charts.conversationsTrend')}
+                    🎯 {t('charts.tokensTrend')}
                 </h3>
                 <div className="text-xs text-text-tertiary">
-                    {t('charts.total')}: {stats.totalConversations.toLocaleString()}
+                    {t('charts.total')}: {(stats.totalTokens / 1000).toFixed(1)}k
                 </div>
             </div>
             <ReactECharts option={options} style={{ height: 200 }} />
@@ -89,4 +89,4 @@ const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
     )
 }
 
-export default ConversationsTrendChart
+export default TokensTrendChart

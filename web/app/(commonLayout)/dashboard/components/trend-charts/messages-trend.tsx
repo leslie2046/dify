@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
-import { useAppFullList, useAppDailyMessages } from '@/service/use-apps'
+import { useWorkspaceStats } from '../workspace-summary/use-workspace-stats'
 import Loading from '@/app/components/base/loading'
 
 type TrendChartProps = {
@@ -25,41 +25,23 @@ const COLOR_CONFIG = {
 
 const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
     const { t } = useTranslation('dashboard')
-
-    const { data: appsData } = useAppFullList()
-    const apps = useMemo(() => (appsData?.data || []).slice(0, 10), [appsData])
-
-    const firstAppId = apps[0]?.id
-    const { data: messagesData, isLoading } = useAppDailyMessages(
-        firstAppId || '',
-        { start: period.start, end: period.end },
-    )
+    // Switch to use aggregated stats instead of single app
+    const { data: stats, isLoading } = useWorkspaceStats(period)
 
     const chartData = useMemo(() => {
-        if (messagesData?.data && messagesData.data.length > 0) {
-            return messagesData.data.map(item => ({
-                date: item.date,
-                message_count: item.message_count || 0,
-            }))
+        if (stats.chartData.messages.length > 0) {
+            return stats.chartData.messages
         }
-
-        const days = 7
+        const days = dayjs(period.end).diff(dayjs(period.start), 'day') + 1
         return Array.from({ length: days }, (_, i) => ({
-            date: dayjs().subtract(days - 1 - i, 'day').format('YYYY-MM-DD'),
-            message_count: 0,
+            date: dayjs(period.end).subtract(days - 1 - i, 'day').format('YYYY-MM-DD'),
+            value: 0,
         }))
-    }, [messagesData])
-
-    const total = useMemo(() => {
-        return chartData.reduce((sum, item) => sum + (item.message_count || 0), 0)
-    }, [chartData])
+    }, [stats, period])
 
     const options: EChartsOption = useMemo(() => ({
         grid: { top: 40, right: 20, bottom: 30, left: 50 },
-        tooltip: {
-            trigger: 'axis',
-            borderWidth: 0,
-        },
+        tooltip: { trigger: 'axis', borderWidth: 0 },
         xAxis: {
             type: 'category',
             data: chartData.map(item => dayjs(item.date).format('MM/DD')),
@@ -72,33 +54,26 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
             axisLabel: { color: COLOR_CONFIG.label, fontSize: 11 },
             splitLine: { lineStyle: { color: COLOR_CONFIG.splitLine } },
         },
-        series: [
-            {
-                name: t('stats.totalMessages'),
-                type: 'line',
-                data: chartData.map(item => item.message_count),
-                smooth: true,
-                lineStyle: { color: COLOR_CONFIG.lineColor, width: 2 },
-                areaStyle: {
-                    color: {
-                        type: 'linear',
-                        x: 0,
-                        y: 0,
-                        x2: 0,
-                        y2: 1,
-                        colorStops: [
-                            { offset: 0, color: COLOR_CONFIG.bgColorStart },
-                            { offset: 1, color: COLOR_CONFIG.bgColorEnd },
-                        ],
-                    },
+        series: [{
+            name: t('stats.totalMessages'),
+            type: 'line',
+            data: chartData.map(item => item.value),
+            smooth: true,
+            lineStyle: { color: COLOR_CONFIG.lineColor, width: 2 },
+            areaStyle: {
+                color: {
+                    type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                    colorStops: [
+                        { offset: 0, color: COLOR_CONFIG.bgColorStart },
+                        { offset: 1, color: COLOR_CONFIG.bgColorEnd },
+                    ],
                 },
-                itemStyle: { color: COLOR_CONFIG.lineColor },
             },
-        ],
+            itemStyle: { color: COLOR_CONFIG.lineColor },
+        }],
     }), [chartData, t])
 
-    if (isLoading)
-        return <Loading />
+    if (isLoading) return <Loading />
 
     return (
         <div className="flex flex-col rounded-xl bg-components-panel-bg p-4 shadow-xs">
@@ -107,8 +82,7 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
                     📈 {t('charts.messagesTrend')}
                 </h3>
                 <div className="text-xs text-text-tertiary">
-                    {apps.length > 0 && `${apps[0].name} - `}
-                    {t('charts.total')}: {total.toLocaleString()}
+                    {t('charts.total')}: {stats.totalMessages.toLocaleString()}
                 </div>
             </div>
             <ReactECharts option={options} style={{ height: 200 }} />
