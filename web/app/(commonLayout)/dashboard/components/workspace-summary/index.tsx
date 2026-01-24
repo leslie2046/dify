@@ -34,46 +34,26 @@ const WorkspaceSummary: FC<WorkspaceSummaryProps> = ({ period }) => {
                     icon="💬"
                     title={t('stats.totalMessages')}
                     value={stats.totalMessages}
-                    change={{
-                        value: stats.changes.messages,
-                        isPositive: stats.changes.messages > 0,
-                    }}
                 />
                 <StatCard
                     icon="💭"
                     title={t('stats.totalConversations')}
                     value={stats.totalConversations}
-                    change={{
-                        value: stats.changes.conversations,
-                        isPositive: stats.changes.conversations > 0,
-                    }}
                 />
                 <StatCard
                     icon="👥"
                     title={t('stats.totalUsers')}
                     value={stats.totalUsers}
-                    change={{
-                        value: stats.changes.users,
-                        isPositive: stats.changes.users > 0,
-                    }}
                 />
                 <StatCard
                     icon="🎯"
                     title={t('stats.totalTokens')}
                     value={`${(stats.totalTokens / 1000000).toFixed(1)}M`}
-                    change={{
-                        value: stats.changes.tokens,
-                        isPositive: stats.changes.tokens > 0,
-                    }}
                 />
                 <StatCard
                     icon="💰"
                     title={t('stats.totalCost')}
                     value={`$${stats.totalCost.toFixed(2)}`}
-                    change={{
-                        value: stats.changes.cost,
-                        isPositive: stats.changes.cost > 0,
-                    }}
                 />
             </div>
         </div>

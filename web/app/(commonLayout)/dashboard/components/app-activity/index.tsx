@@ -1,12 +1,12 @@
-'use client'
 import type { FC } from 'react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
 import { useAppFullList } from '@/service/use-apps'
 import { useWorkspaceStats } from '../workspace-summary/use-workspace-stats'
 import Loading from '@/app/components/base/loading'
 import AppIcon from '@/app/components/base/app-icon'
+import { cn } from '@/utils/classnames' // You might need to import cn utility
 
 export type AppActivityProps = {
     period: {
@@ -15,9 +15,12 @@ export type AppActivityProps = {
     }
 }
 
+type SortType = 'messages' | 'users' | 'cost'
+
 const AppActivity: FC<AppActivityProps> = ({ period }) => {
     const { t } = useTranslation('dashboard')
     const router = useRouter()
+    const [sortType, setSortType] = useState<SortType>('messages')
 
     const { data: appsData, isLoading: appsLoading } = useAppFullList()
     const { data: stats, isLoading: statsLoading } = useWorkspaceStats(period)
@@ -25,28 +28,23 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
     const apps = useMemo(() => {
         if (!appsData?.data) return []
 
-        // Create a map of stats by appId for O(1) lookup
         const statsMap = new Map(stats?.appStats?.map(s => [s.id, s]) || [])
 
-        // Merge app data with stats
         const mergedApps = appsData.data.map(app => {
             const stat = statsMap.get(app.id) || { messages: 0, conversations: 0, users: 0, cost: 0 }
             return {
                 appId: app.id,
-                app, // Keep original app object for Icon
+                app,
                 appName: app.name,
                 appMode: app.mode,
-                enabled: app.enable_site || app.enable_api,
-                // Stats
                 messages: stat.messages,
                 users: stat.users,
                 cost: stat.cost,
             }
         })
 
-        // Sort by Messages count descending
-        return mergedApps.sort((a, b) => b.messages - a.messages).slice(0, 10)
-    }, [appsData, stats])
+        return mergedApps.sort((a, b) => b[sortType] - a[sortType]).slice(0, 50)
+    }, [appsData, stats, sortType])
 
     const handleAppClick = (appId: string) => {
         router.push(`/app/${appId}/overview`)
@@ -71,15 +69,27 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
         )
     }
 
+    const SortHeader = ({ type, label }: { type: SortType, label: string }) => (
+        <th
+            className={cn(
+                "px-4 py-3 text-left text-xs font-medium cursor-pointer transition-colors select-none",
+                sortType === type ? "text-primary-600 bg-primary-25" : "text-text-tertiary hover:text-text-secondary"
+            )}
+            onClick={() => setSortType(type)}
+        >
+            <div className="flex items-center gap-1">
+                {label}
+                {sortType === type && <span>↓</span>}
+            </div>
+        </th>
+    )
+
     return (
         <div className="mb-6">
             <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-text-primary">
                     🔥 {t('appActivity.title')}
                 </h2>
-                <span className="text-xs text-text-tertiary">
-                    {t('appActivity.sortBy')} {t('stats.totalMessages')}
-                </span>
             </div>
 
             <div className="overflow-x-auto rounded-xl bg-components-panel-bg shadow-xs">
@@ -89,29 +99,21 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                             <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
                                 {t('appActivity.appName')}
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
-                                {t('stats.totalMessages')}
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
-                                {t('stats.totalUsers')}
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-text-tertiary">
-                                {t('stats.totalCost')}
-                            </th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-text-tertiary">
-                                {t('appActivity.status')}
-                            </th>
+                            <SortHeader type="messages" label={t('stats.totalMessages')} />
+                            <SortHeader type="users" label={t('stats.totalUsers')} />
+                            <SortHeader type="cost" label={t('stats.totalCost')} />
                         </tr>
                     </thead>
                     <tbody>
-                        {apps.map(item => (
+                        {apps.map((item, index) => (
                             <tr
                                 key={item.appId}
-                                className="cursor-pointer border-b border-divider-subtle transition-colors hover:bg-state-base-hover"
+                                className="cursor-pointer border-b border-divider-subtle transition-colors hover:bg-state-base-hover last:border-0"
                                 onClick={() => handleAppClick(item.appId)}
                             >
                                 <td className="px-4 py-3">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-3">
+                                        <span className="w-4 text-xs text-text-tertiary font-mono">{index + 1}</span>
                                         <AppIcon
                                             size="tiny"
                                             icon={item.app.icon}
@@ -122,32 +124,19 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                                                 {item.appName}
                                             </span>
                                             <span className="text-xs text-text-tertiary capitalize">
-                                                {item.appMode === 'workflow' ? 'Workflow' : 'Chat Bot'}
+                                                {item.appMode === 'workflow' ? 'Workflow' : 'Start from Blank'}
                                             </span>
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-4 py-3 text-sm text-text-secondary">
+                                <td className="px-4 py-3 text-sm text-text-secondary font-mono">
                                     {item.messages.toLocaleString()}
                                 </td>
-                                <td className="px-4 py-3 text-sm text-text-secondary">
+                                <td className="px-4 py-3 text-sm text-text-secondary font-mono">
                                     {item.users.toLocaleString()}
                                 </td>
-                                <td className="px-4 py-3 text-sm text-text-secondary">
+                                <td className="px-4 py-3 text-sm text-text-secondary font-mono">
                                     ${item.cost.toFixed(4)}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                    {item.enabled
-                                        ? (
-                                            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700">
-                                                {t('appActivity.enabled')}
-                                            </span>
-                                        )
-                                        : (
-                                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
-                                                {t('appActivity.disabled')}
-                                            </span>
-                                        )}
                                 </td>
                             </tr>
                         ))}
