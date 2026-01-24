@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
+import { useAppFullList, useAppDailyMessages } from '@/service/use-apps'
 import Loading from '@/app/components/base/loading'
 
 type TrendChartProps = {
@@ -25,17 +26,36 @@ const COLOR_CONFIG = {
 const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
     const { t } = useTranslation()
 
-    // TODO: 实现真实的数据获取
-    // 暂时使用模拟数据
+    // Get all apps
+    const { data: appsData } = useAppFullList()
+    const apps = useMemo(() => (appsData?.data || []).slice(0, 10), [appsData])
+
+    // Get data for first app as example
+    const firstAppId = apps[0]?.id
+    const { data: messagesData, isLoading } = useAppDailyMessages(
+        firstAppId || '',
+        { start: period.start, end: period.end },
+    )
+
     const chartData = useMemo(() => {
+        if (messagesData?.data && messagesData.data.length > 0) {
+            return messagesData.data.map(item => ({
+                date: item.date,
+                message_count: item.message_count || 0,
+            }))
+        }
+
+        // Default empty data
         const days = 7
         return Array.from({ length: days }, (_, i) => ({
             date: dayjs().subtract(days - 1 - i, 'day').format('YYYY-MM-DD'),
             message_count: 0,
         }))
-    }, [])
+    }, [messagesData])
 
-    const total = 0
+    const total = useMemo(() => {
+        return chartData.reduce((sum, item) => sum + (item.message_count || 0), 0)
+    }, [chartData])
 
     const options: EChartsOption = useMemo(() => ({
         grid: { top: 40, right: 20, bottom: 30, left: 50 },
@@ -80,6 +100,9 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
         ],
     }), [chartData, t])
 
+    if (isLoading)
+        return <Loading />
+
     return (
         <div className="flex flex-col rounded-xl bg-components-panel-bg p-4 shadow-xs">
             <div className="mb-2 flex items-center justify-between">
@@ -87,6 +110,7 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
                     📈 {t('dashboard.charts.messagesTrend')}
                 </h3>
                 <div className="text-xs text-text-tertiary">
+                    {apps.length > 0 && `${apps[0].name} - `}
                     {t('dashboard.charts.total')}: {total.toLocaleString()}
                 </div>
             </div>
