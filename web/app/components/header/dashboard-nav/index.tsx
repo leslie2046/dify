@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useSelectedLayoutSegment } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
-import classNames from 'classnames'
+import cn from 'classnames'
 
 type DashboardNavProps = {
     className?: string
@@ -16,7 +16,7 @@ const DashboardNav = ({ className }: DashboardNavProps) => {
     return (
         <Link
             href="/dashboard"
-            className={classNames(
+            className={cn(
                 className,
                 activated
                     ? 'bg-components-main-nav-nav-button-bg-active text-components-main-nav-nav-button-text-active'

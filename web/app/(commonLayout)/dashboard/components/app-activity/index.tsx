@@ -1,11 +1,12 @@
+'use client'
 import type { FC } from 'react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
+import { RiArrowUpLine, RiArrowDownLine } from '@remixicon/react'
 import { fetchAppList, getAppDailyMessages, getAppDailyEndUsers, getAppTokenCosts } from '@/service/apps'
 import Loading from '@/app/components/base/loading'
-import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
 
 export type AppActivityProps = {
     period: {
@@ -95,7 +96,6 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                     0,
                 ) || 0
 
-                // 简化版趋势判断：基于消息数
                 const trend = totalMessages > 0 ? 'up' : 'neutral'
 
                 return {
@@ -250,10 +250,10 @@ const AppActivity: FC<AppActivityProps> = ({ period }) => {
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                     {app.trend === 'up' && (
-                                        <ArrowUpRight className="mx-auto h-4 w-4 text-green-600" />
+                                        <RiArrowUpLine className="mx-auto h-4 w-4 text-green-600" />
                                     )}
                                     {app.trend === 'down' && (
-                                        <ArrowDownRight className="mx-auto h-4 w-4 text-red-600" />
+                                        <RiArrowDownLine className="mx-auto h-4 w-4 text-red-600" />
                                     )}
                                     {app.trend === 'neutral' && (
                                         <span className="text-xs text-text-quaternary">-</span>

@@ -1,6 +1,7 @@
+'use client'
 import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { RiArrowUpLine, RiArrowDownLine } from '@remixicon/react'
 
 export type StatCardProps = {
     icon: string
@@ -28,7 +29,7 @@ const StatCard: FC<StatCardProps> = ({
                 <div className="text-2xl">{icon}</div>
                 {change && (
                     <div className={`flex items-center text-sm font-medium ${change.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                        {change.isPositive ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                        {change.isPositive ? <RiArrowUpLine className="h-4 w-4" /> : <RiArrowDownLine className="h-4 w-4" />}
                         <span>{Math.abs(change.value)}%</span>
                     </div>
                 )}

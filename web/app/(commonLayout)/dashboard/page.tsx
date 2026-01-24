@@ -1,3 +1,4 @@
+'use client'
 import type { FC } from 'react'
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -10,7 +11,6 @@ import AppActivity from './components/app-activity'
 const DashboardPage: FC = () => {
     const { t } = useTranslation()
 
-    // 时间范围：默认最近 7 天
     const [timePeriod] = useState<'today' | '7days' | '30days'>('7days')
 
     const period = useMemo(() => {
@@ -53,16 +53,9 @@ const DashboardPage: FC = () => {
             </header>
 
             <div className="flex-1 pb-6">
-                {/* Phase 2: 工作空间概览 */}
                 <WorkspaceSummary period={period} />
-
-                {/* Phase 3: 趋势分析图表 */}
                 <TrendCharts period={period} />
-
-                {/* Phase 4: 费用报表 */}
                 <CostReports period={period} />
-
-                {/* Phase 5: 应用活跃度分析 */}
                 <AppActivity period={period} />
             </div>
         </div>

@@ -1,3 +1,4 @@
+'use client'
 import type { FC } from 'react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -26,7 +27,6 @@ const COLOR_CONFIG = {
 const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
     const { t } = useTranslation()
 
-    // 获取应用列表
     const { data: appsData } = useSWR(
         '/apps',
         () => fetchAppList({ url: '/apps', params: { page: 1, limit: 100 } }),
@@ -34,11 +34,9 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
 
     const apps = useMemo(() => appsData?.data || [], [appsData])
 
-    // 聚合所有应用的消息趋势数据
     const { data: aggregatedData, isLoading } = useSWR(
         apps.length > 0 ? ['/dashboard/messages-trend', period] : null,
         async () => {
-            // 并行获取所有应用的消息数据
             const promises = apps.slice(0, 20).map(app =>
                 getAppDailyMessages({
                     url: `/apps/${app.id}/statistics/daily-messages`,
@@ -48,7 +46,6 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
 
             const results = await Promise.all(promises)
 
-            // 按日期聚合
             const dateMap = new Map<string, number>()
 
             results.forEach((result) => {
@@ -59,7 +56,6 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
                 })
             })
 
-            // 转换为数组并排序
             const aggregated = Array.from(dateMap.entries())
                 .map(([date, count]) => ({ date, message_count: count }))
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -70,7 +66,6 @@ const MessagesTrendChart: FC<TrendChartProps> = ({ period }) => {
 
     const chartData = useMemo(() => {
         if (!aggregatedData || aggregatedData.length === 0) {
-            // 默认显示 7 天的空数据
             const days = 7
             return Array.from({ length: days }, (_, i) => ({
                 date: dayjs().subtract(days - 1 - i, 'day').format('YYYY-MM-DD'),

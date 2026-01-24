@@ -1,3 +1,4 @@
+'use client'
 import type { FC } from 'react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -30,7 +31,6 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
 
     const apps = useMemo(() => appsData?.data || [], [appsData])
 
-    // 获取并聚合成本数据
     const { data: costData, isLoading } = useSWR(
         apps.length > 0 ? ['/dashboard/cost-reports', period, apps.length] : null,
         async () => {
@@ -55,7 +55,6 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                 ),
             )
 
-            // 计算每个应用的总成本和 Token
             const appCosts: AppCost[] = costsResults
                 .map((result) => {
                     const totalCost = result.data.reduce(
@@ -72,20 +71,19 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                         appName: result.appName,
                         totalCost,
                         totalTokens,
-                        percentage: 0, // 稍后计算
+                        percentage: 0,
                     }
                 })
-                .filter(app => app.totalCost > 0) // 只显示有成本的应用
-                .sort((a, b) => b.totalCost - a.totalCost) // 按成本降序
+                .filter(app => app.totalCost > 0)
+                .sort((a, b) => b.totalCost - a.totalCost)
 
-            // 计算总成本和百分比
             const totalCost = appCosts.reduce((sum, app) => sum + app.totalCost, 0)
             appCosts.forEach((app) => {
                 app.percentage = totalCost > 0 ? (app.totalCost / totalCost) * 100 : 0
             })
 
             return {
-                apps: appCosts.slice(0, 10), // 只显示前 10 名
+                apps: appCosts.slice(0, 10),
                 totalCost,
                 totalTokens: appCosts.reduce((sum, app) => sum + app.totalTokens, 0),
             }
@@ -117,7 +115,6 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                 💰 {t('dashboard.costReports.title')}
             </h2>
 
-            {/* 总览卡片 */}
             <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="rounded-xl bg-components-panel-bg p-4 shadow-xs">
                     <div className="text-xs text-text-tertiary">
@@ -145,7 +142,6 @@ const CostReports: FC<CostReportsProps> = ({ period }) => {
                 </div>
             </div>
 
-            {/* 应用成本排名 */}
             <div className="rounded-xl bg-components-panel-bg p-4 shadow-xs">
                 <h3 className="mb-4 text-sm font-medium text-text-secondary">
                     {t('dashboard.costReports.ranking')}
