@@ -40,6 +40,7 @@ const fetchAppStats = async (appId: string, period: PeriodQuery) => {
         get<AppDailyEndUsersResponse>(`/apps/${appId}/statistics/daily-end-users`, { params: period }),
         get<AppTokenCostsResponse>(`/apps/${appId}/statistics/token-costs`, { params: period }),
     ])
+    console.log(`[Dashboard Debug] Fetched stats for app ${appId}:`, { messages, conversations, users, costs })
     return { appId, messages, conversations, users, costs }
 }
 
