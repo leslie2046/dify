@@ -2,11 +2,9 @@
 import type { FC } from 'react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import useSWR from 'swr'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
-import { fetchAppList, getAppDailyConversations } from '@/service/apps'
 import Loading from '@/app/components/base/loading'
 
 type TrendChartProps = {
@@ -27,55 +25,15 @@ const COLOR_CONFIG = {
 const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
     const { t } = useTranslation()
 
-    const { data: appsData } = useSWR(
-        '/apps',
-        () => fetchAppList({ url: '/apps', params: { page: 1, limit: 100 } }),
-    )
-
-    const apps = useMemo(() => appsData?.data || [], [appsData])
-
-    const { data: aggregatedData, isLoading } = useSWR(
-        apps.length > 0 ? ['/dashboard/conversations-trend', period] : null,
-        async () => {
-            const promises = apps.slice(0, 20).map(app =>
-                getAppDailyConversations({
-                    url: `/apps/${app.id}/statistics/daily-conversations`,
-                    params: period,
-                }).catch(() => ({ data: [] })),
-            )
-
-            const results = await Promise.all(promises)
-
-            const dateMap = new Map<string, number>()
-
-            results.forEach((result) => {
-                result.data.forEach((item: any) => {
-                    const date = item.date
-                    const count = item.conversation_count || 0
-                    dateMap.set(date, (dateMap.get(date) || 0) + count)
-                })
-            })
-
-            return Array.from(dateMap.entries())
-                .map(([date, count]) => ({ date, conversation_count: count }))
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        },
-    )
-
     const chartData = useMemo(() => {
-        if (!aggregatedData || aggregatedData.length === 0) {
-            const days = 7
-            return Array.from({ length: days }, (_, i) => ({
-                date: dayjs().subtract(days - 1 - i, 'day').format('YYYY-MM-DD'),
-                conversation_count: 0,
-            }))
-        }
-        return aggregatedData
-    }, [aggregatedData])
+        const days = 7
+        return Array.from({ length: days }, (_, i) => ({
+            date: dayjs().subtract(days - 1 - i, 'day').format('YYYY-MM-DD'),
+            conversation_count: 0,
+        }))
+    }, [])
 
-    const total = useMemo(() => {
-        return chartData.reduce((sum, item) => sum + (item.conversation_count || 0), 0)
-    }, [chartData])
+    const total = 0
 
     const options: EChartsOption = useMemo(() => ({
         grid: { top: 40, right: 20, bottom: 30, left: 50 },
@@ -119,9 +77,6 @@ const ConversationsTrendChart: FC<TrendChartProps> = ({ period }) => {
             },
         ],
     }), [chartData, t])
-
-    if (isLoading)
-        return <Loading />
 
     return (
         <div className="flex flex-col rounded-xl bg-components-panel-bg p-4 shadow-xs">

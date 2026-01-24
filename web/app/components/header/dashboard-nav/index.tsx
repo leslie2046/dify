@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useSelectedLayoutSegment } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
-import cn from 'classnames'
+import { cn } from '@/utils/classnames'
 
 type DashboardNavProps = {
     className?: string
