@@ -9,7 +9,7 @@ import CostReports from './components/cost-reports'
 import AppActivity from './components/app-activity'
 
 const DashboardPage: FC = () => {
-    const { t } = useTranslation()
+    const { t } = useTranslation('dashboard')
 
     const [timePeriod] = useState<'today' | '7days' | '30days'>('7days')
 
