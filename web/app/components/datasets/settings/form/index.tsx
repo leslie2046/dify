@@ -2,7 +2,7 @@
 import type { AppIconSelection } from '@/app/components/base/app-icon-picker'
 import type { DefaultModel } from '@/app/components/header/account-setting/model-provider-page/declarations'
 import type { Member } from '@/models/common'
-import type { IconInfo } from '@/models/datasets'
+import type { IconInfo, SummaryIndexSetting as SummaryIndexSettingType } from '@/models/datasets'
 import type { AppIconType, RetrievalConfig } from '@/types/app'
 import { RiAlertFill } from '@remixicon/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -21,6 +21,7 @@ import RetrievalMethodConfig from '@/app/components/datasets/common/retrieval-me
 import { ModelTypeEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
 import { useModelList } from '@/app/components/header/account-setting/model-provider-page/hooks'
 import ModelSelector from '@/app/components/header/account-setting/model-provider-page/model-selector'
+import { IS_CE_EDITION } from '@/config'
 import { useSelector as useAppContextWithSelector } from '@/context/app-context'
 import { useDatasetDetailContextWithSelector } from '@/context/dataset-detail'
 import { useDocLink } from '@/context/i18n'
@@ -33,6 +34,7 @@ import RetrievalSettings from '../../external-knowledge-base/create/RetrievalSet
 import ChunkStructure from '../chunk-structure'
 import IndexMethod from '../index-method'
 import PermissionSelector from '../permission-selector'
+import SummaryIndexSetting from '../summary-index-setting'
 import { checkShowMultiModalTip } from '../utils'
 
 const rowClass = 'flex gap-x-1'
@@ -76,6 +78,12 @@ const Form = () => {
           model: '',
         },
   )
+  const [summaryIndexSetting, setSummaryIndexSetting] = useState(currentDataset?.summary_index_setting)
+  const handleSummaryIndexSettingChange = useCallback((payload: SummaryIndexSettingType) => {
+    setSummaryIndexSetting((prev) => {
+      return { ...prev, ...payload }
+    })
+  }, [])
   const { data: rerankModelList } = useModelList(ModelTypeEnum.rerank)
   const { data: embeddingModelList } = useModelList(ModelTypeEnum.textEmbedding)
   const { data: membersData } = useMembers()
@@ -167,6 +175,7 @@ const Form = () => {
             },
           }),
           keyword_number: keywordNumber,
+          summary_index_setting: summaryIndexSetting,
         },
       } as any
       if (permission === DatasetPermission.partialMembers) {
@@ -265,7 +274,7 @@ const Form = () => {
         </div>
       </div>
       {
-        currentDataset?.doc_form && (
+        !!currentDataset?.doc_form && (
           <>
             <Divider
               type="horizontal"
@@ -281,7 +290,7 @@ const Form = () => {
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
-                    href={docLink('/guides/knowledge-base/create-knowledge-and-upload-documents/chunking-and-cleaning-text')}
+                    href={docLink('/use-dify/knowledge/create-knowledge/chunking-and-cleaning-text')}
                     className="text-text-accent"
                   >
                     {t('form.chunkStructure.learnMore', { ns: 'datasetSettings' })}
@@ -298,13 +307,13 @@ const Form = () => {
           </>
         )
       }
-      {(isShowIndexMethod || indexMethod === 'high_quality') && (
+      {!!(isShowIndexMethod || indexMethod === 'high_quality') && (
         <Divider
           type="horizontal"
           className="my-1 h-px bg-divider-subtle"
         />
       )}
-      {isShowIndexMethod && (
+      {!!isShowIndexMethod && (
         <div className={rowClass}>
           <div className={labelClass}>
             <div className="system-sm-semibold text-text-secondary">{t('form.indexMethod', { ns: 'datasetSettings' })}</div>
@@ -348,6 +357,23 @@ const Form = () => {
           </div>
         </div>
       )}
+      {
+        indexMethod === IndexingType.QUALIFIED
+        && [ChunkingMode.text, ChunkingMode.parentChild].includes(currentDataset?.doc_form as ChunkingMode)
+        && IS_CE_EDITION && (
+          <>
+            <Divider
+              type="horizontal"
+              className="my-1 h-px bg-divider-subtle"
+            />
+            <SummaryIndexSetting
+              entry="dataset-settings"
+              summaryIndexSetting={summaryIndexSetting}
+              onSummaryIndexSettingChange={handleSummaryIndexSettingChange}
+            />
+          </>
+        )
+      }
       {/* Retrieval Method Config */}
       {currentDataset?.provider === 'external'
         ? (
@@ -403,7 +429,7 @@ const Form = () => {
               </div>
             </>
           )
-        // eslint-disable-next-line sonarjs/no-nested-conditional
+
         : indexMethod
           ? (
               <>
@@ -421,10 +447,7 @@ const Form = () => {
                         <a
                           target="_blank"
                           rel="noopener noreferrer"
-                          href={docLink('/guides/knowledge-base/create-knowledge-and-upload-documents/setting-indexing-methods#setting-the-retrieval-setting', {
-                            'zh-Hans': '/guides/knowledge-base/create-knowledge-and-upload-documents/setting-indexing-methods#指定检索方式',
-                            'ja-JP': '/guides/knowledge-base/create-knowledge-and-upload-documents/setting-indexing-methods#検索方法の指定',
-                          })}
+                          href={docLink('/use-dify/knowledge/create-knowledge/setting-indexing-methods')}
                           className="text-text-accent"
                         >
                           {t('form.retrievalSetting.learnMore', { ns: 'datasetSettings' })}
