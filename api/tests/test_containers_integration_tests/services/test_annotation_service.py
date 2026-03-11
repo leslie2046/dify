@@ -2,12 +2,14 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 from faker import Faker
+from sqlalchemy.orm import Session
 from werkzeug.exceptions import NotFound
 
 from models import Account
 from models.model import MessageAnnotation
 from services.annotation_service import AppAnnotationService
 from services.app_service import AppService
+from tests.test_containers_integration_tests.helpers import generate_valid_password
 
 
 class TestAnnotationService:
@@ -52,7 +54,7 @@ class TestAnnotationService:
                 "current_user": mock_user,
             }
 
-    def _create_test_app_and_account(self, db_session_with_containers, mock_external_service_dependencies):
+    def _create_test_app_and_account(self, db_session_with_containers: Session, mock_external_service_dependencies):
         """
         Helper method to create a test app and account for testing.
 
@@ -77,7 +79,7 @@ class TestAnnotationService:
             email=fake.email(),
             name=fake.name(),
             interface_language="en-US",
-            password=fake.password(length=12),
+            password=generate_valid_password(fake),
         )
         TenantService.create_owner_tenant_if_not_exist(account, name=fake.company())
         tenant = account.current_tenant
@@ -115,11 +117,10 @@ class TestAnnotationService:
             tenant_id,
         )
 
-    def _create_test_conversation(self, app, account, fake):
+    def _create_test_conversation(self, db_session_with_containers: Session, app, account, fake):
         """
         Helper method to create a test conversation with all required fields.
         """
-        from extensions.ext_database import db
         from models.model import Conversation
 
         conversation = Conversation(
@@ -141,17 +142,16 @@ class TestAnnotationService:
             from_account_id=account.id,
         )
 
-        db.session.add(conversation)
-        db.session.flush()
+        db_session_with_containers.add(conversation)
+        db_session_with_containers.flush()
         return conversation
 
-    def _create_test_message(self, app, conversation, account, fake):
+    def _create_test_message(self, db_session_with_containers: Session, app, conversation, account, fake):
         """
         Helper method to create a test message with all required fields.
         """
         import json
 
-        from extensions.ext_database import db
         from models.model import Message
 
         message = Message(
@@ -180,12 +180,12 @@ class TestAnnotationService:
             from_account_id=account.id,
         )
 
-        db.session.add(message)
-        db.session.commit()
+        db_session_with_containers.add(message)
+        db_session_with_containers.commit()
         return message
 
     def test_insert_app_annotation_directly_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test successful direct insertion of app annotation.
@@ -211,17 +211,33 @@ class TestAnnotationService:
         assert annotation.id is not None
 
         # Verify annotation was saved to database
-        from extensions.ext_database import db
 
-        db.session.refresh(annotation)
+        db_session_with_containers.refresh(annotation)
         assert annotation.id is not None
 
         # Verify add_annotation_to_index_task was called (when annotation setting exists)
         # Note: In this test, no annotation setting exists, so task should not be called
         mock_external_service_dependencies["add_task"].delay.assert_not_called()
 
+    def test_insert_app_annotation_directly_requires_question(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
+        """
+        Question must be provided when inserting annotations directly.
+        """
+        fake = Faker()
+        app, _ = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
+
+        annotation_args = {
+            "question": None,
+            "answer": fake.text(max_nb_chars=200),
+        }
+
+        with pytest.raises(ValueError):
+            AppAnnotationService.insert_app_annotation_directly(annotation_args, app.id)
+
     def test_insert_app_annotation_directly_app_not_found(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test direct insertion of app annotation when app is not found.
@@ -243,7 +259,7 @@ class TestAnnotationService:
             AppAnnotationService.insert_app_annotation_directly(annotation_args, non_existent_app_id)
 
     def test_update_app_annotation_directly_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test successful direct update of app annotation.
@@ -281,7 +297,7 @@ class TestAnnotationService:
         mock_external_service_dependencies["update_task"].delay.assert_not_called()
 
     def test_up_insert_app_annotation_from_message_new(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test creating new annotation from message.
@@ -290,8 +306,8 @@ class TestAnnotationService:
         app, account = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
 
         # Create a conversation and message first
-        conversation = self._create_test_conversation(app, account, fake)
-        message = self._create_test_message(app, conversation, account, fake)
+        conversation = self._create_test_conversation(db_session_with_containers, app, account, fake)
+        message = self._create_test_message(db_session_with_containers, app, conversation, account, fake)
 
         # Setup annotation data with message_id
         annotation_args = {
@@ -316,7 +332,7 @@ class TestAnnotationService:
         mock_external_service_dependencies["add_task"].delay.assert_not_called()
 
     def test_up_insert_app_annotation_from_message_update(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test updating existing annotation from message.
@@ -325,8 +341,8 @@ class TestAnnotationService:
         app, account = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
 
         # Create a conversation and message first
-        conversation = self._create_test_conversation(app, account, fake)
-        message = self._create_test_message(app, conversation, account, fake)
+        conversation = self._create_test_conversation(db_session_with_containers, app, account, fake)
+        message = self._create_test_message(db_session_with_containers, app, conversation, account, fake)
 
         # Create initial annotation
         initial_args = {
@@ -356,7 +372,7 @@ class TestAnnotationService:
         mock_external_service_dependencies["add_task"].delay.assert_not_called()
 
     def test_up_insert_app_annotation_from_message_app_not_found(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test creating annotation from message when app is not found.
@@ -378,7 +394,7 @@ class TestAnnotationService:
             AppAnnotationService.up_insert_app_annotation_from_message(annotation_args, non_existent_app_id)
 
     def test_get_annotation_list_by_app_id_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test successful retrieval of annotation list by app ID.
@@ -411,7 +427,7 @@ class TestAnnotationService:
             assert annotation.account_id == account.id
 
     def test_get_annotation_list_by_app_id_with_keyword(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test retrieval of annotation list with keyword search.
@@ -445,7 +461,7 @@ class TestAnnotationService:
         assert unique_keyword in annotation_list[0].question or unique_keyword in annotation_list[0].content
 
     def test_get_annotation_list_by_app_id_with_special_characters_in_keyword(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         r"""
         Test retrieval of annotation list with special characters in keyword to verify SQL injection prevention.
@@ -517,7 +533,7 @@ class TestAnnotationService:
         assert all("50%" in (item.question or "") or "50%" in (item.content or "") for item in annotation_list)
 
     def test_get_annotation_list_by_app_id_app_not_found(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test retrieval of annotation list when app is not found.
@@ -532,7 +548,9 @@ class TestAnnotationService:
         with pytest.raises(NotFound, match="App not found"):
             AppAnnotationService.get_annotation_list_by_app_id(non_existent_app_id, page=1, limit=10, keyword="")
 
-    def test_delete_app_annotation_success(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_delete_app_annotation_success(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test successful deletion of app annotation.
         """
@@ -551,16 +569,19 @@ class TestAnnotationService:
         AppAnnotationService.delete_app_annotation(app.id, annotation_id)
 
         # Verify annotation was deleted
-        from extensions.ext_database import db
 
-        deleted_annotation = db.session.query(MessageAnnotation).where(MessageAnnotation.id == annotation_id).first()
+        deleted_annotation = (
+            db_session_with_containers.query(MessageAnnotation).where(MessageAnnotation.id == annotation_id).first()
+        )
         assert deleted_annotation is None
 
         # Verify delete_annotation_index_task was called (when annotation setting exists)
         # Note: In this test, no annotation setting exists, so task should not be called
         mock_external_service_dependencies["delete_task"].delay.assert_not_called()
 
-    def test_delete_app_annotation_app_not_found(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_delete_app_annotation_app_not_found(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test deletion of app annotation when app is not found.
         """
@@ -576,7 +597,7 @@ class TestAnnotationService:
             AppAnnotationService.delete_app_annotation(non_existent_app_id, annotation_id)
 
     def test_delete_app_annotation_annotation_not_found(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test deletion of app annotation when annotation is not found.
@@ -589,7 +610,9 @@ class TestAnnotationService:
         with pytest.raises(NotFound, match="Annotation not found"):
             AppAnnotationService.delete_app_annotation(app.id, non_existent_annotation_id)
 
-    def test_enable_app_annotation_success(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_enable_app_annotation_success(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test successful enabling of app annotation.
         """
@@ -615,7 +638,9 @@ class TestAnnotationService:
         # Verify task was called
         mock_external_service_dependencies["enable_task"].delay.assert_called_once()
 
-    def test_disable_app_annotation_success(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_disable_app_annotation_success(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test successful disabling of app annotation.
         """
@@ -634,7 +659,9 @@ class TestAnnotationService:
         # Verify task was called
         mock_external_service_dependencies["disable_task"].delay.assert_called_once()
 
-    def test_enable_app_annotation_cached_job(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_enable_app_annotation_cached_job(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test enabling app annotation when job is already cached.
         """
@@ -668,7 +695,9 @@ class TestAnnotationService:
         # Clean up
         redis_client.delete(enable_app_annotation_key)
 
-    def test_get_annotation_hit_histories_success(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_get_annotation_hit_histories_success(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test successful retrieval of annotation hit histories.
         """
@@ -711,7 +740,9 @@ class TestAnnotationService:
             assert history.app_id == app.id
             assert history.account_id == account.id
 
-    def test_add_annotation_history_success(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_add_annotation_history_success(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test successful addition of annotation history.
         """
@@ -746,16 +777,15 @@ class TestAnnotationService:
         )
 
         # Verify hit count was incremented
-        from extensions.ext_database import db
 
-        db.session.refresh(annotation)
+        db_session_with_containers.refresh(annotation)
         assert annotation.hit_count == initial_hit_count + 1
 
         # Verify history was created
         from models.model import AppAnnotationHitHistory
 
         history = (
-            db.session.query(AppAnnotationHitHistory)
+            db_session_with_containers.query(AppAnnotationHitHistory)
             .where(
                 AppAnnotationHitHistory.annotation_id == annotation.id, AppAnnotationHitHistory.message_id == message_id
             )
@@ -769,7 +799,9 @@ class TestAnnotationService:
         assert history.score == score
         assert history.source == "console"
 
-    def test_get_annotation_by_id_success(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_get_annotation_by_id_success(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test successful retrieval of annotation by ID.
         """
@@ -794,7 +826,9 @@ class TestAnnotationService:
         assert retrieved_annotation.content == annotation_args["answer"]
         assert retrieved_annotation.account_id == account.id
 
-    def test_batch_import_app_annotations_success(self, db_session_with_containers, mock_external_service_dependencies):
+    def test_batch_import_app_annotations_success(
+        self, db_session_with_containers: Session, mock_external_service_dependencies
+    ):
         """
         Test successful batch import of app annotations.
         """
@@ -837,7 +871,7 @@ class TestAnnotationService:
         mock_external_service_dependencies["batch_import_task"].delay.assert_called_once()
 
     def test_batch_import_app_annotations_empty_file(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test batch import with empty CSV file.
@@ -872,7 +906,7 @@ class TestAnnotationService:
         assert "empty" in result["error_msg"].lower()
 
     def test_batch_import_app_annotations_quota_exceeded(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test batch import when quota is exceeded.
@@ -918,7 +952,7 @@ class TestAnnotationService:
         assert "limit" in result["error_msg"].lower()
 
     def test_get_app_annotation_setting_by_app_id_enabled(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test getting enabled app annotation setting by app ID.
@@ -927,7 +961,6 @@ class TestAnnotationService:
         app, account = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
 
         # Create annotation setting
-        from extensions.ext_database import db
         from models.dataset import DatasetCollectionBinding
         from models.model import AppAnnotationSetting
 
@@ -939,8 +972,8 @@ class TestAnnotationService:
             collection_name=f"annotation_collection_{fake.uuid4()}",
         )
         collection_binding.id = str(fake.uuid4())
-        db.session.add(collection_binding)
-        db.session.flush()
+        db_session_with_containers.add(collection_binding)
+        db_session_with_containers.flush()
 
         # Create annotation setting
         annotation_setting = AppAnnotationSetting(
@@ -950,8 +983,8 @@ class TestAnnotationService:
             created_user_id=account.id,
             updated_user_id=account.id,
         )
-        db.session.add(annotation_setting)
-        db.session.commit()
+        db_session_with_containers.add(annotation_setting)
+        db_session_with_containers.commit()
 
         # Get annotation setting
         result = AppAnnotationService.get_app_annotation_setting_by_app_id(app.id)
@@ -964,7 +997,7 @@ class TestAnnotationService:
         assert result["embedding_model"]["embedding_model_name"] == "text-embedding-ada-002"
 
     def test_get_app_annotation_setting_by_app_id_disabled(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test getting disabled app annotation setting by app ID.
@@ -979,7 +1012,7 @@ class TestAnnotationService:
         assert result["enabled"] is False
 
     def test_update_app_annotation_setting_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test successful update of app annotation setting.
@@ -988,7 +1021,6 @@ class TestAnnotationService:
         app, account = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
 
         # Create annotation setting first
-        from extensions.ext_database import db
         from models.dataset import DatasetCollectionBinding
         from models.model import AppAnnotationSetting
 
@@ -1000,8 +1032,8 @@ class TestAnnotationService:
             collection_name=f"annotation_collection_{fake.uuid4()}",
         )
         collection_binding.id = str(fake.uuid4())
-        db.session.add(collection_binding)
-        db.session.flush()
+        db_session_with_containers.add(collection_binding)
+        db_session_with_containers.flush()
 
         # Create annotation setting
         annotation_setting = AppAnnotationSetting(
@@ -1011,8 +1043,8 @@ class TestAnnotationService:
             created_user_id=account.id,
             updated_user_id=account.id,
         )
-        db.session.add(annotation_setting)
-        db.session.commit()
+        db_session_with_containers.add(annotation_setting)
+        db_session_with_containers.commit()
 
         # Update annotation setting
         update_args = {
@@ -1029,11 +1061,11 @@ class TestAnnotationService:
         assert result["embedding_model"]["embedding_model_name"] == "text-embedding-ada-002"
 
         # Verify database was updated
-        db.session.refresh(annotation_setting)
+        db_session_with_containers.refresh(annotation_setting)
         assert annotation_setting.score_threshold == 0.9
 
     def test_export_annotation_list_by_app_id_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test successful export of annotation list by app ID.
@@ -1066,7 +1098,7 @@ class TestAnnotationService:
                 assert annotation.created_at <= exported_annotations[i - 1].created_at
 
     def test_export_annotation_list_by_app_id_app_not_found(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test export of annotation list when app is not found.
@@ -1082,7 +1114,7 @@ class TestAnnotationService:
             AppAnnotationService.export_annotation_list_by_app_id(non_existent_app_id)
 
     def test_insert_app_annotation_directly_with_setting_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test successful direct insertion of app annotation with annotation setting enabled.
@@ -1091,7 +1123,6 @@ class TestAnnotationService:
         app, account = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
 
         # Create annotation setting first
-        from extensions.ext_database import db
         from models.dataset import DatasetCollectionBinding
         from models.model import AppAnnotationSetting
 
@@ -1103,8 +1134,8 @@ class TestAnnotationService:
             collection_name=f"annotation_collection_{fake.uuid4()}",
         )
         collection_binding.id = str(fake.uuid4())
-        db.session.add(collection_binding)
-        db.session.flush()
+        db_session_with_containers.add(collection_binding)
+        db_session_with_containers.flush()
 
         # Create annotation setting
         annotation_setting = AppAnnotationSetting(
@@ -1114,8 +1145,8 @@ class TestAnnotationService:
             created_user_id=account.id,
             updated_user_id=account.id,
         )
-        db.session.add(annotation_setting)
-        db.session.commit()
+        db_session_with_containers.add(annotation_setting)
+        db_session_with_containers.commit()
 
         # Setup annotation data
         annotation_args = {
@@ -1144,7 +1175,7 @@ class TestAnnotationService:
         assert call_args[4] == collection_binding.id  # collection_binding_id
 
     def test_update_app_annotation_directly_with_setting_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test successful direct update of app annotation with annotation setting enabled.
@@ -1153,7 +1184,6 @@ class TestAnnotationService:
         app, account = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
 
         # Create annotation setting first
-        from extensions.ext_database import db
         from models.dataset import DatasetCollectionBinding
         from models.model import AppAnnotationSetting
 
@@ -1165,8 +1195,8 @@ class TestAnnotationService:
             collection_name=f"annotation_collection_{fake.uuid4()}",
         )
         collection_binding.id = str(fake.uuid4())
-        db.session.add(collection_binding)
-        db.session.flush()
+        db_session_with_containers.add(collection_binding)
+        db_session_with_containers.flush()
 
         # Create annotation setting
         annotation_setting = AppAnnotationSetting(
@@ -1176,8 +1206,8 @@ class TestAnnotationService:
             created_user_id=account.id,
             updated_user_id=account.id,
         )
-        db.session.add(annotation_setting)
-        db.session.commit()
+        db_session_with_containers.add(annotation_setting)
+        db_session_with_containers.commit()
 
         # First, create an annotation
         original_args = {
@@ -1217,7 +1247,7 @@ class TestAnnotationService:
         assert call_args[4] == collection_binding.id  # collection_binding_id
 
     def test_delete_app_annotation_with_setting_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test successful deletion of app annotation with annotation setting enabled.
@@ -1226,7 +1256,6 @@ class TestAnnotationService:
         app, account = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
 
         # Create annotation setting first
-        from extensions.ext_database import db
         from models.dataset import DatasetCollectionBinding
         from models.model import AppAnnotationSetting
 
@@ -1238,8 +1267,8 @@ class TestAnnotationService:
             collection_name=f"annotation_collection_{fake.uuid4()}",
         )
         collection_binding.id = str(fake.uuid4())
-        db.session.add(collection_binding)
-        db.session.flush()
+        db_session_with_containers.add(collection_binding)
+        db_session_with_containers.flush()
 
         # Create annotation setting
         annotation_setting = AppAnnotationSetting(
@@ -1250,8 +1279,8 @@ class TestAnnotationService:
             updated_user_id=account.id,
         )
 
-        db.session.add(annotation_setting)
-        db.session.commit()
+        db_session_with_containers.add(annotation_setting)
+        db_session_with_containers.commit()
 
         # Create an annotation first
         annotation_args = {
@@ -1268,7 +1297,9 @@ class TestAnnotationService:
         AppAnnotationService.delete_app_annotation(app.id, annotation_id)
 
         # Verify annotation was deleted
-        deleted_annotation = db.session.query(MessageAnnotation).where(MessageAnnotation.id == annotation_id).first()
+        deleted_annotation = (
+            db_session_with_containers.query(MessageAnnotation).where(MessageAnnotation.id == annotation_id).first()
+        )
         assert deleted_annotation is None
 
         # Verify delete_annotation_index_task was called
@@ -1280,7 +1311,7 @@ class TestAnnotationService:
         assert call_args[3] == collection_binding.id  # collection_binding_id
 
     def test_up_insert_app_annotation_from_message_with_setting_success(
-        self, db_session_with_containers, mock_external_service_dependencies
+        self, db_session_with_containers: Session, mock_external_service_dependencies
     ):
         """
         Test creating annotation from message with annotation setting enabled.
@@ -1289,7 +1320,6 @@ class TestAnnotationService:
         app, account = self._create_test_app_and_account(db_session_with_containers, mock_external_service_dependencies)
 
         # Create annotation setting first
-        from extensions.ext_database import db
         from models.dataset import DatasetCollectionBinding
         from models.model import AppAnnotationSetting
 
@@ -1301,8 +1331,8 @@ class TestAnnotationService:
             collection_name=f"annotation_collection_{fake.uuid4()}",
         )
         collection_binding.id = str(fake.uuid4())
-        db.session.add(collection_binding)
-        db.session.flush()
+        db_session_with_containers.add(collection_binding)
+        db_session_with_containers.flush()
 
         # Create annotation setting
         annotation_setting = AppAnnotationSetting(
@@ -1312,12 +1342,12 @@ class TestAnnotationService:
             created_user_id=account.id,
             updated_user_id=account.id,
         )
-        db.session.add(annotation_setting)
-        db.session.commit()
+        db_session_with_containers.add(annotation_setting)
+        db_session_with_containers.commit()
 
         # Create a conversation and message first
-        conversation = self._create_test_conversation(app, account, fake)
-        message = self._create_test_message(app, conversation, account, fake)
+        conversation = self._create_test_conversation(db_session_with_containers, app, account, fake)
+        message = self._create_test_message(db_session_with_containers, app, conversation, account, fake)
 
         # Setup annotation data with message_id
         annotation_args = {
