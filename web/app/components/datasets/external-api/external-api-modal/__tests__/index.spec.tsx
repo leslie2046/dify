@@ -12,7 +12,7 @@ vi.mock('@/service/datasets', () => ({
 }))
 
 const mockNotify = vi.fn()
-vi.mock('@/app/components/base/toast', () => ({
+vi.mock('@/app/components/base/toast/context', () => ({
   useToastContext: () => ({
     notify: mockNotify,
   }),
@@ -362,7 +362,7 @@ describe('AddExternalAPIModal', () => {
 
       // There are multiple cancel buttons, find the one in the confirm dialog
       const cancelButtons = screen.getAllByRole('button', { name: /cancel/i })
-      const confirmDialogCancelButton = cancelButtons[cancelButtons.length - 1]
+      const confirmDialogCancelButton = cancelButtons.at(-1)
       fireEvent.click(confirmDialogCancelButton)
 
       await waitFor(() => {

@@ -9,7 +9,7 @@ const mockNotify = vi.fn()
 const mockClose = vi.fn()
 
 // Mock ToastContext with factory function
-vi.mock('@/app/components/base/toast', async () => {
+vi.mock('@/app/components/base/toast/context', async () => {
   const { createContext, useContext } = await import('use-context-selector')
   const context = createContext({ notify: mockNotify, close: mockClose })
   return {
@@ -27,7 +27,7 @@ vi.mock('@/app/components/base/file-uploader/utils', () => ({
 vi.mock('@/utils/format', () => ({
   getFileExtension: (filename: string) => {
     const parts = filename.split('.')
-    return parts[parts.length - 1] || ''
+    return parts.at(-1) || ''
   },
 }))
 
@@ -87,7 +87,7 @@ vi.mock('@/service/base', () => ({
 
 // Import after all mocks are set up
 const { useLocalFileUpload } = await import('../use-local-file-upload')
-const { ToastContext } = await import('@/app/components/base/toast')
+const { ToastContext } = await import('@/app/components/base/toast/context')
 
 const createWrapper = () => {
   return ({ children }: { children: ReactNode }) => (
@@ -896,7 +896,7 @@ describe('useLocalFileUpload', () => {
 
       await waitFor(() => {
         const calls = mockSetLocalFileList.mock.calls
-        const lastCall = calls[calls.length - 1][0]
+        const lastCall = calls.at(-1)[0]
         expect(lastCall.some((f: FileItem) => f.progress === PROGRESS_ERROR)).toBe(true)
       })
     })

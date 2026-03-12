@@ -5,7 +5,7 @@ import { useTextGeneration } from '../hooks'
 const mockNotify = vi.fn()
 const mockSsePost = vi.fn<(url: string, fetchOptions: { body: Record<string, unknown> }, otherOptions: IOtherOptions) => void>()
 
-vi.mock('@/app/components/base/toast', () => ({
+vi.mock('@/app/components/base/toast/context', () => ({
   useToastContext: () => ({
     notify: mockNotify,
   }),
@@ -16,7 +16,7 @@ vi.mock('@/service/base', () => ({
 }))
 
 const getLatestStreamOptions = (): IOtherOptions => {
-  const latestCall = mockSsePost.mock.calls[mockSsePost.mock.calls.length - 1]
+  const latestCall = mockSsePost.mock.calls.at(-1)
   if (!latestCall)
     throw new Error('Expected ssePost to be called at least once')
   return latestCall[2]

@@ -42,7 +42,7 @@ vi.mock('@/context/app-context', () => ({
   }),
 }))
 
-vi.mock('@/app/components/base/toast', () => ({
+vi.mock('@/app/components/base/toast/context', () => ({
   useToastContext: () => ({ notify: vi.fn() }),
 }))
 
@@ -243,7 +243,7 @@ describe('PluginAuthInAgent Component', () => {
     const triggerButton = screen.getByRole('button')
     fireEvent.click(triggerButton)
     const credentialItems = screen.getAllByText('Specific Credential')
-    const popupItem = credentialItems[credentialItems.length - 1]
+    const popupItem = credentialItems.at(-1)
     fireEvent.click(popupItem)
     expect(onAuthorizationItemClick).toHaveBeenCalledWith('specific-cred-id')
   })

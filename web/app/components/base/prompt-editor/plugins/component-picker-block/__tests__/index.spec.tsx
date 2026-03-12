@@ -28,7 +28,8 @@ import {
 import * as React from 'react'
 import { GeneratorType } from '@/app/components/app/configuration/config/automatic/types'
 import { VarType } from '@/app/components/workflow/types'
-import { EventEmitterContextProvider, useEventEmitterContextContext } from '@/context/event-emitter'
+import { useEventEmitterContextContext } from '@/context/event-emitter'
+import { EventEmitterContextProvider } from '@/context/event-emitter-provider'
 import { INSERT_CONTEXT_BLOCK_COMMAND } from '../../context-block'
 import { INSERT_CURRENT_BLOCK_COMMAND } from '../../current-block'
 import { INSERT_ERROR_MESSAGE_BLOCK_COMMAND } from '../../error-message-block'
@@ -345,7 +346,7 @@ describe('ComponentPicker (component-picker-block/index.tsx)', () => {
     // There is no accessible "option" role here (menu items are plain divs).
     // We locate menu items by `tabindex="-1"` inside the listbox.
     const listbox = await screen.findByRole('listbox', { name: /typeahead menu/i })
-    const menuItems = Array.from(listbox.querySelectorAll('[tabindex="-1"]'))
+    const menuItems = [...listbox.querySelectorAll('[tabindex="-1"]')]
 
     // Expect at least: (1) our empty variable option, (2) the "add variable" option.
     expect(menuItems.length).toBeGreaterThanOrEqual(2)

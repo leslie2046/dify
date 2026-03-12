@@ -52,7 +52,7 @@ vi.mock('../../hooks/use-credential', () => ({
 
 // Mock toast context
 const mockNotify = vi.fn()
-vi.mock('@/app/components/base/toast', () => ({
+vi.mock('@/app/components/base/toast/context', () => ({
   useToastContext: () => ({
     notify: mockNotify,
   }),
@@ -445,7 +445,7 @@ describe('Authorized Component', () => {
       })
 
       // Find all SVG icons in the action area and try to find delete button
-      const svgIcons = Array.from(document.querySelectorAll('svg.remixicon'))
+      const svgIcons = [...document.querySelectorAll('svg.remixicon')]
 
       for (const svg of svgIcons) {
         const button = svg.closest('button')
@@ -642,7 +642,7 @@ describe('Authorized Component', () => {
       )
 
       // OAuth credentials have rename enabled - find rename button by looking for svg with edit icon
-      const allButtons = Array.from(document.querySelectorAll('button'))
+      const allButtons = [...document.querySelectorAll('button')]
       let renameButton: Element | null = null
       for (const btn of allButtons) {
         if (btn.querySelector('svg.remixicon') && !btn.querySelector('svg.ri-delete-bin-line')) {
@@ -772,7 +772,7 @@ describe('Authorized Component', () => {
 
       // Find all action buttons in the credential item
       // The rename button should be present for OAuth credentials
-      const actionButtons = Array.from(document.querySelectorAll('.group-hover\\:flex button, button'))
+      const actionButtons = [...document.querySelectorAll('.group-hover\\:flex button, button')]
 
       // Find the rename trigger button (the one with edit icon, not delete)
       for (const btn of actionButtons) {
@@ -882,7 +882,7 @@ describe('Authorized Component', () => {
 
         // Find and click close/cancel button in the modal
         // Look for cancel button or close icon
-        const allButtons = Array.from(document.querySelectorAll('button'))
+        const allButtons = [...document.querySelectorAll('button')]
         let closeButton: Element | null = null
         for (const btn of allButtons) {
           const text = btn.textContent?.toLowerCase() || ''
@@ -924,7 +924,7 @@ describe('Authorized Component', () => {
       )
 
       // Find and click edit button
-      const editButtons = Array.from(document.querySelectorAll('button'))
+      const editButtons = [...document.querySelectorAll('button')]
       let editBtn: Element | null = null
 
       for (const btn of editButtons) {
@@ -944,7 +944,7 @@ describe('Authorized Component', () => {
         })
 
         // Find cancel button to close modal - look for it in all buttons
-        const allButtons = Array.from(document.querySelectorAll('button'))
+        const allButtons = [...document.querySelectorAll('button')]
         let cancelBtn: Element | null = null
 
         for (const btn of allButtons) {
@@ -1012,7 +1012,7 @@ describe('Authorized Component', () => {
 
           // Find and click the close/cancel button
           // The modal should have a cancel button
-          const buttons = Array.from(document.querySelectorAll('button'))
+          const buttons = [...document.querySelectorAll('button')]
           for (const btn of buttons) {
             const text = btn.textContent?.toLowerCase() || ''
             if (text.includes('cancel') || text.includes('close')) {
@@ -1115,7 +1115,7 @@ describe('Authorized Component', () => {
       expect(screen.getByText('API Keys')).toBeInTheDocument()
 
       // Find edit button - look for buttons in the action area
-      const actionAreaButtons = Array.from(document.querySelectorAll('.group-hover\\:flex button, .hidden button'))
+      const actionAreaButtons = [...document.querySelectorAll('.group-hover\\:flex button, .hidden button')]
 
       for (const btn of actionAreaButtons) {
         const svg = btn.querySelector('svg')
@@ -1167,7 +1167,7 @@ describe('Authorized Component', () => {
 
       // Find edit button by looking for action buttons (not in the confirm dialog)
       // These are grouped in hidden elements that show on hover
-      const actionAreaButtons = Array.from(document.querySelectorAll('.group-hover\\:flex button, .hidden button'))
+      const actionAreaButtons = [...document.querySelectorAll('.group-hover\\:flex button, .hidden button')]
 
       for (const btn of actionAreaButtons) {
         const svg = btn.querySelector('svg')
@@ -1259,7 +1259,7 @@ describe('Authorized Component', () => {
       )
 
       // Open edit modal - find the edit button by looking for RiEqualizer2Line icon
-      const allButtons = Array.from(document.querySelectorAll('button'))
+      const allButtons = [...document.querySelectorAll('button')]
       let editButton: Element | null = null
       for (const btn of allButtons) {
         if (btn.querySelector('svg.ri-equalizer-2-line')) {
@@ -1278,7 +1278,7 @@ describe('Authorized Component', () => {
         })
 
         // Find the close/cancel button
-        const closeButtons = Array.from(document.querySelectorAll('button'))
+        const closeButtons = [...document.querySelectorAll('button')]
         let closeButton: Element | null = null
 
         for (const btn of closeButtons) {
@@ -1658,7 +1658,7 @@ describe('Authorized Component', () => {
 
       // Find all buttons in the credential item's action area
       // The action buttons are in a hidden container with class 'hidden shrink-0' or 'group-hover:flex'
-      const allButtons = Array.from(document.querySelectorAll('button'))
+      const allButtons = [...document.querySelectorAll('button')]
       let deleteButton: HTMLElement | null = null
 
       // Look for the delete button by checking each button
@@ -1770,7 +1770,7 @@ describe('Authorized Component', () => {
       )
 
       // Find delete button in action area
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
       let foundDeleteButton = false
 
       for (const btn of actionButtons) {
@@ -1853,7 +1853,7 @@ describe('Authorized Component', () => {
       })
 
       // Find delete button in action area
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         await act(async () => {
@@ -1902,7 +1902,7 @@ describe('Authorized Component', () => {
       })
 
       // Find and trigger delete to open confirm dialog
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         await act(async () => {
@@ -1960,7 +1960,7 @@ describe('Authorized Component', () => {
       })
 
       // Find and trigger delete to open confirm dialog
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         await act(async () => {
@@ -2006,7 +2006,7 @@ describe('Authorized Component', () => {
       })
 
       // Find and trigger delete to open confirm dialog
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         await act(async () => {
@@ -2060,7 +2060,7 @@ describe('Authorized Component', () => {
       })
 
       // Find edit button in action area
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         const svg = btn.querySelector('svg')
@@ -2121,7 +2121,7 @@ describe('Authorized Component', () => {
       })
 
       // Find and click edit button to open ApiKeyModal
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         const svg = btn.querySelector('svg')
@@ -2189,7 +2189,7 @@ describe('Authorized Component', () => {
       })
 
       // Find rename button in action area
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         await act(async () => {
@@ -2253,7 +2253,7 @@ describe('Authorized Component', () => {
       })
 
       // Find rename button
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         await act(async () => {
@@ -2318,7 +2318,7 @@ describe('Authorized Component', () => {
       })
 
       // Find and click edit button to open modal
-      const actionButtons = Array.from(document.querySelectorAll('.hidden button, [class*="group-hover"] button'))
+      const actionButtons = [...document.querySelectorAll('.hidden button, [class*="group-hover"] button')]
 
       for (const btn of actionButtons) {
         const svg = btn.querySelector('svg')
@@ -2374,7 +2374,7 @@ describe('Authorized Component', () => {
       })
 
       // Open edit modal by clicking edit button
-      const hiddenButtons = Array.from(document.querySelectorAll('.hidden button'))
+      const hiddenButtons = [...document.querySelectorAll('.hidden button')]
       for (const btn of hiddenButtons) {
         await act(async () => {
           fireEvent.click(btn)
@@ -2445,7 +2445,7 @@ describe('Authorized Component', () => {
         })
 
         // Close the modal via cancel
-        const buttons = Array.from(document.querySelectorAll('button'))
+        const buttons = [...document.querySelectorAll('button')]
         for (const btn of buttons) {
           const text = btn.textContent || ''
           if (text.toLowerCase().includes('cancel')) {
