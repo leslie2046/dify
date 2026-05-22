@@ -2,7 +2,6 @@ import uuid
 
 from flask import request
 from flask_restx import Resource, marshal
-from graphon.model_runtime.entities.model_entities import ModelType
 from pydantic import BaseModel, Field
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
@@ -10,7 +9,9 @@ from werkzeug.exceptions import Forbidden, NotFound
 
 import services
 from configs import dify_config
-from controllers.common.schema import register_schema_models
+from controllers.common.controller_schemas import ChildChunkCreatePayload, ChildChunkUpdatePayload
+from controllers.common.fields import SimpleResultResponse
+from controllers.common.schema import register_response_schema_models, register_schema_models
 from controllers.console import console_ns
 from controllers.console.app.error import ProviderNotInitializeError
 from controllers.console.datasets.error import (
@@ -30,7 +31,9 @@ from core.model_manager import ModelManager
 from core.rag.index_processor.constant.index_type import IndexTechniqueType
 from extensions.ext_database import db
 from extensions.ext_redis import redis_client
+from fields.base import ResponseModel
 from fields.segment_fields import child_chunk_fields, segment_fields
+from graphon.model_runtime.entities.model_entities import ModelType
 from libs.helper import escape_like_pattern
 from libs.login import current_account_with_tenant, login_required
 from models.dataset import ChildChunk, DocumentSegment
@@ -82,12 +85,9 @@ class BatchImportPayload(BaseModel):
     upload_file_id: str
 
 
-class ChildChunkCreatePayload(BaseModel):
-    content: str
-
-
-class ChildChunkUpdatePayload(BaseModel):
-    content: str
+class SegmentBatchImportStatusResponse(ResponseModel):
+    job_id: str
+    job_status: str
 
 
 class ChildChunkBatchUpdatePayload(BaseModel):
@@ -105,6 +105,7 @@ register_schema_models(
     ChildChunkBatchUpdatePayload,
     ChildChunkUpdateArgs,
 )
+register_response_schema_models(console_ns, SegmentBatchImportStatusResponse, SimpleResultResponse)
 
 
 @console_ns.route("/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/segments")
@@ -224,6 +225,7 @@ class DatasetDocumentSegmentListApi(Resource):
     @login_required
     @account_initialization_required
     @cloud_edition_billing_rate_limit_check("knowledge")
+    @console_ns.response(204, "Segments deleted successfully")
     def delete(self, dataset_id, document_id):
         current_user, _ = current_account_with_tenant()
 
@@ -259,6 +261,7 @@ class DatasetDocumentSegmentApi(Resource):
     @account_initialization_required
     @cloud_edition_billing_resource_check("vector_space")
     @cloud_edition_billing_rate_limit_check("knowledge")
+    @console_ns.response(200, "Success", console_ns.models[SimpleResultResponse.__name__])
     def patch(self, dataset_id, document_id, action):
         current_user, current_tenant_id = current_account_with_tenant()
 
@@ -431,6 +434,7 @@ class DatasetDocumentSegmentUpdateApi(Resource):
     @login_required
     @account_initialization_required
     @cloud_edition_billing_rate_limit_check("knowledge")
+    @console_ns.response(204, "Segment deleted successfully")
     def delete(self, dataset_id, document_id, segment_id):
         current_user, current_tenant_id = current_account_with_tenant()
 
@@ -471,6 +475,7 @@ class DatasetDocumentSegmentUpdateApi(Resource):
     "/datasets/batch_import_status/<uuid:job_id>",
 )
 class DatasetDocumentSegmentBatchImportApi(Resource):
+    @console_ns.response(200, "Batch import started", console_ns.models[SegmentBatchImportStatusResponse.__name__])
     @setup_required
     @login_required
     @account_initialization_required
@@ -521,6 +526,7 @@ class DatasetDocumentSegmentBatchImportApi(Resource):
             return {"error": str(e)}, 500
         return {"job_id": job_id, "job_status": "waiting"}, 200
 
+    @console_ns.response(200, "Batch import status", console_ns.models[SegmentBatchImportStatusResponse.__name__])
     @setup_required
     @login_required
     @account_initialization_required
@@ -698,6 +704,7 @@ class ChildChunkUpdateApi(Resource):
     @login_required
     @account_initialization_required
     @cloud_edition_billing_rate_limit_check("knowledge")
+    @console_ns.response(204, "Child chunk deleted successfully")
     def delete(self, dataset_id, document_id, segment_id, child_chunk_id):
         current_user, current_tenant_id = current_account_with_tenant()
 
