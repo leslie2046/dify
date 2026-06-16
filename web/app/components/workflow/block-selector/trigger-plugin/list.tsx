@@ -1,25 +1,31 @@
 'use client'
-import { memo, useEffect, useMemo } from 'react'
-import { useAllTriggerPlugins } from '@/service/use-triggers'
-import TriggerPluginItem from './item'
 import type { BlockEnum } from '../../types'
 import type { TriggerDefaultValue, TriggerWithProvider } from '../types'
+import type { TriggerPluginActionPreviewPayload } from './action-item'
+import { createPreviewCardHandle, PreviewCard } from '@langgenius/dify-ui/preview-card'
+import { memo, useEffect, useMemo } from 'react'
 import { useGetLanguage } from '@/context/i18n'
+import { useAllTriggerPlugins } from '@/service/use-triggers'
+import { TriggerPluginActionPreviewCard } from './action-item'
+import TriggerPluginItem from './item'
 
 type TriggerPluginListProps = {
   onSelect: (type: BlockEnum, trigger?: TriggerDefaultValue) => void
   searchText: string
   onContentStateChange?: (hasContent: boolean) => void
   tags?: string[]
+  disabled?: boolean
 }
 
 const TriggerPluginList = ({
   onSelect,
   searchText,
   onContentStateChange,
+  disabled = false,
 }: TriggerPluginListProps) => {
   const { data: triggerPluginsData } = useAllTriggerPlugins()
   const language = useGetLanguage()
+  const previewCardHandle = useMemo(() => createPreviewCardHandle<TriggerPluginActionPreviewPayload>(), [])
 
   const normalizedSearch = searchText.trim().toLowerCase()
   const triggerPlugins = useMemo(() => {
@@ -95,9 +101,16 @@ const TriggerPluginList = ({
           key={plugin.id}
           payload={plugin}
           onSelect={onSelect}
+          disabled={disabled}
           hasSearchText={!!searchText}
+          previewCardHandle={previewCardHandle}
         />
       ))}
+      <PreviewCard handle={previewCardHandle}>
+        {({ payload }) => (
+          <TriggerPluginActionPreviewCard payload={payload as TriggerPluginActionPreviewPayload | undefined} />
+        )}
+      </PreviewCard>
     </div>
   )
 }

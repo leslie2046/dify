@@ -4,16 +4,19 @@ import math
 import threading
 import time
 from collections import Counter, OrderedDict
+from typing import override
 
 import numpy as np
 
 from core.model_manager import ModelManager
-from core.model_runtime.entities.model_entities import ModelType
 from core.rag.datasource.keyword.jieba.jieba_keyword_table_handler import JiebaKeywordTableHandler
 from core.rag.embedding.cached_embedding import CacheEmbedding
+from core.rag.index_processor.constant.doc_type import DocType
+from core.rag.index_processor.constant.query_type import QueryType
 from core.rag.models.document import Document
 from core.rag.rerank.entity.weight import VectorSetting, Weights
 from core.rag.rerank.rerank_base import BaseRerankRunner
+from graphon.model_runtime.entities.model_entities import ModelType
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +44,14 @@ class WeightRerankRunner(BaseRerankRunner):
         self.tenant_id = tenant_id
         self.weights = weights
 
+    @override
     def run(
         self,
         query: str,
         documents: list[Document],
         score_threshold: float | None = None,
         top_n: int | None = None,
-        user: str | None = None,
+        query_type: QueryType = QueryType.TEXT_QUERY,
     ) -> list[Document]:
         """
         Run rerank model
@@ -55,13 +59,27 @@ class WeightRerankRunner(BaseRerankRunner):
         :param documents: documents for reranking (should be already deduplicated)
         :param score_threshold: score threshold
         :param top_n: top n
-        :param user: unique user id if needed
 
         :return:
         """
-        # Note: Deduplication is now handled by RetrievalService before reranking
-        # This simplifies the logic and avoids duplicate deduplication
-        
+        unique_documents = []
+        doc_ids = set()
+        for document in documents:
+            if (
+                document.provider == "dify"
+                and document.metadata is not None
+                and document.metadata["doc_id"] not in doc_ids
+            ):
+                # weight rerank only support text documents
+                if not document.metadata.get("doc_type") or document.metadata.get("doc_type") == DocType.TEXT:
+                    doc_ids.add(document.metadata["doc_id"])
+                    unique_documents.append(document)
+            else:
+                if document not in unique_documents:
+                    unique_documents.append(document)
+
+        documents = unique_documents
+
         query_scores = self._calculate_keyword_score(query, documents)
         query_vector_scores = self._calculate_cosine(self.tenant_id, query, documents, self.weights.vector_setting)
 
@@ -232,7 +250,7 @@ class WeightRerankRunner(BaseRerankRunner):
             vector_setting.embedding_provider_name,
             vector_setting.embedding_model_name
         )
-        
+
         query_vector = cache_embedding.embed_query(query)
         for document in documents:
             # calculate cosine similarity
@@ -309,7 +327,7 @@ class WeightRerankRunner(BaseRerankRunner):
             
             # Load new model
             load_start = time.perf_counter()
-            model_manager = ModelManager()
+            model_manager = ModelManager.for_tenant(tenant_id=tenant_id)
             embedding_model = model_manager.get_model_instance(
                 tenant_id=tenant_id,
                 provider=provider,

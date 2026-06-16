@@ -1,13 +1,14 @@
-from typing import Annotated, Literal, Self, TypeAlias
+from dataclasses import dataclass
+from typing import Annotated, Literal, Self, override
 
 from pydantic import BaseModel, Field
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.app.entities.app_invoke_entities import AdvancedChatAppGenerateEntity, WorkflowAppGenerateEntity
-from core.workflow.graph_engine.layers.base import GraphEngineLayer
-from core.workflow.graph_events.base import GraphEngineEvent
-from core.workflow.graph_events.graph import GraphRunPausedEvent
+from core.workflow.system_variables import SystemVariableKey, get_system_text
+from graphon.graph_engine.layers import GraphEngineLayer
+from graphon.graph_events import GraphEngineEvent, GraphRunPausedEvent
 from models.model import AppMode
 from repositories.api_workflow_run_repository import APIWorkflowRunRepository
 from repositories.factory import DifyAPIRepositoryFactory
@@ -26,7 +27,7 @@ class _AdvancedChatAppGenerateEntityWrapper(BaseModel):
     entity: AdvancedChatAppGenerateEntity
 
 
-_GenerateEntityUnion: TypeAlias = Annotated[
+type _GenerateEntityUnion = Annotated[
     _WorkflowGenerateEntityWrapper | _AdvancedChatAppGenerateEntityWrapper,
     Field(discriminator="type"),
 ]
@@ -52,6 +53,14 @@ class WorkflowResumptionContext(BaseModel):
         return self.generate_entity.entity
 
 
+@dataclass(frozen=True)
+class PauseStateLayerConfig:
+    """Configuration container for instantiating pause persistence layers."""
+
+    session_factory: Engine | sessionmaker[Session]
+    state_owner_user_id: str
+
+
 class PauseStatePersistenceLayer(GraphEngineLayer):
     def __init__(
         self,
@@ -66,6 +75,7 @@ class PauseStatePersistenceLayer(GraphEngineLayer):
         """
         if isinstance(session_factory, Engine):
             session_factory = sessionmaker(session_factory)
+        super().__init__()
         self._session_maker = session_factory
         self._state_owner_user_id = state_owner_user_id
         self._generate_entity = generate_entity
@@ -73,6 +83,7 @@ class PauseStatePersistenceLayer(GraphEngineLayer):
     def _get_repo(self) -> APIWorkflowRunRepository:
         return DifyAPIRepositoryFactory.create_api_workflow_run_repository(self._session_maker)
 
+    @override
     def on_graph_start(self) -> None:
         """
         Called when graph execution starts.
@@ -82,6 +93,7 @@ class PauseStatePersistenceLayer(GraphEngineLayer):
         """
         pass
 
+    @override
     def on_event(self, event: GraphEngineEvent) -> None:
         """
         Called for every event emitted by the engine.
@@ -98,8 +110,6 @@ class PauseStatePersistenceLayer(GraphEngineLayer):
         if not isinstance(event, GraphRunPausedEvent):
             return
 
-        assert self.graph_runtime_state is not None
-
         entity_wrapper: _GenerateEntityUnion
         if isinstance(self._generate_entity, WorkflowAppGenerateEntity):
             entity_wrapper = _WorkflowGenerateEntityWrapper(entity=self._generate_entity)
@@ -111,7 +121,10 @@ class PauseStatePersistenceLayer(GraphEngineLayer):
             generate_entity=entity_wrapper,
         )
 
-        workflow_run_id: str | None = self.graph_runtime_state.system_variable.workflow_execution_id
+        workflow_run_id = get_system_text(
+            self.graph_runtime_state.variable_pool,
+            SystemVariableKey.WORKFLOW_EXECUTION_ID,
+        )
         assert workflow_run_id is not None
         repo = self._get_repo()
         repo.create_workflow_pause(
@@ -121,6 +134,7 @@ class PauseStatePersistenceLayer(GraphEngineLayer):
             pause_reasons=event.reasons,
         )
 
+    @override
     def on_graph_end(self, error: Exception | None) -> None:
         """
         Called when graph execution ends.

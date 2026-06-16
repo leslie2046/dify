@@ -1,10 +1,10 @@
-import type { CredentialFormSchemaBase } from '../header/account-setting/model-provider-page/declarations'
-import type { ToolCredential } from '@/app/components/tools/types'
-import type { Locale } from '@/i18n-config'
-import type { AgentFeature } from '@/app/components/workflow/nodes/agent/types'
-import type { AutoUpdateConfig } from './reference-setting-modal/auto-update-setting/types'
 import type { FormTypeEnum } from '../base/form/types'
+import type { CredentialFormSchemaBase } from '../header/account-setting/model-provider-page/declarations'
+import type { AutoUpdateConfig } from './reference-setting-modal/auto-update-setting/types'
 import type { TypeWithI18N } from '@/app/components/base/form/types'
+import type { Collection, ToolCredential } from '@/app/components/tools/types'
+import type { AgentFeature } from '@/app/components/workflow/nodes/agent/types'
+import type { Locale } from '@/i18n-config'
 
 export enum PluginCategoryEnum {
   tool = 'tool',
@@ -22,7 +22,7 @@ export enum PluginSource {
   debugging = 'remote',
 }
 
-export type PluginToolDeclaration = {
+type PluginToolDeclaration = {
   identity: {
     author: string
     name: string
@@ -34,12 +34,12 @@ export type PluginToolDeclaration = {
   credentials_schema: ToolCredential[] // TODO
 }
 
-export type PluginEndpointDeclaration = {
+type PluginEndpointDeclaration = {
   settings: ToolCredential[]
-  endpoints: EndpointItem[]
+  endpoints?: EndpointItem[] | null
 }
 
-export type EndpointItem = {
+type EndpointItem = {
   path: string
   method: string
   hidden?: boolean
@@ -60,7 +60,7 @@ export type EndpointListItem = {
   hook_id: string
 }
 
-export type PluginDeclarationMeta = {
+type PluginDeclarationMeta = {
   version: string
   minimum_dify_version?: string
 }
@@ -71,6 +71,7 @@ export type PluginDeclaration = {
   version: string
   author: string
   icon: string
+  icon_dark?: string
   name: string
   category: PluginCategoryEnum
   label: Record<Locale, string>
@@ -79,7 +80,7 @@ export type PluginDeclaration = {
   resource: any // useless in frontend
   plugins: any // useless in frontend
   verified: boolean
-  endpoint: PluginEndpointDeclaration
+  endpoint?: PluginEndpointDeclaration | null
   tool?: PluginToolDeclaration
   datasource?: PluginToolDeclaration
   model: any
@@ -95,14 +96,14 @@ export type PluginTriggerSubscriptionConstructor = {
   parameters: ParametersSchema[]
 }
 
-export type PluginTriggerDefinition = {
+type PluginTriggerDefinition = {
   events: TriggerEvent[]
   identity: Identity
   subscription_constructor: PluginTriggerSubscriptionConstructor
   subscription_schema: ParametersSchema[]
 }
 
-export type CredentialsSchema = {
+type CredentialsSchema = {
   name: string
   label: Record<Locale, string>
   description: Record<Locale, string>
@@ -116,7 +117,7 @@ export type CredentialsSchema = {
   placeholder: Record<Locale, string>
 }
 
-export type OauthSchema = {
+type OauthSchema = {
   client_schema: CredentialsSchema[]
   credentials_schema: CredentialsSchema[]
 }
@@ -130,7 +131,7 @@ export type ParametersSchema = {
   scope: any
   required: boolean
   multiple: boolean
-  default?: string[]
+  default?: string | string[]
   min: any
   max: any
   precision: any
@@ -140,23 +141,6 @@ export type ParametersSchema = {
     icon?: string
   }>
   description: Record<Locale, string>
-}
-
-export type PropertiesSchema = {
-  type: FormTypeEnum
-  name: string
-  scope: any
-  required: boolean
-  default: any
-  options: Array<{
-    value: string
-    label: Record<Locale, string>
-    icon?: string
-  }>
-  label: Record<Locale, string>
-  help: Record<Locale, string>
-  url: any
-  placeholder: any
 }
 
 export type TriggerEventParameter = {
@@ -206,10 +190,10 @@ export type PluginManifestInMarket = {
   introduction: string
   verified: boolean
   install_count: number
-  badges: string[],
+  badges: string[] | null
   verification: {
     authorized_category: 'langgenius' | 'partner' | 'community'
-  },
+  }
   from: Dependency['type']
 }
 
@@ -248,7 +232,7 @@ export type PluginInfoFromMarketPlace = {
 }
 
 export type Plugin = {
-  type: 'plugin' | 'bundle' | 'model' | 'extension' | 'tool' | 'agent_strategy'
+  type: 'plugin' | 'bundle' | 'model' | 'extension' | 'tool' | 'agent_strategy' | 'datasource' | 'trigger'
   org: string
   author?: string
   name: string
@@ -257,10 +241,11 @@ export type Plugin = {
   latest_version: string
   latest_package_identifier: string
   icon: string
+  icon_dark?: string
   verified: boolean
-  label: Record<Locale, string>
-  brief: Record<Locale, string>
-  description: Record<Locale, string>
+  label: Partial<Record<Locale, string>>
+  brief: Partial<Record<Locale, string>>
+  description: Partial<Record<Locale, string>>
   // Repo readme.md content
   introduction: string
   repository: string
@@ -270,10 +255,10 @@ export type Plugin = {
     settings: CredentialFormSchemaBase[]
   }
   tags: { name: string }[]
-  badges: string[],
+  badges: string[] | null
   verification: {
     authorized_category: 'langgenius' | 'partner' | 'community'
-  },
+  }
   from: Dependency['type']
 }
 
@@ -298,7 +283,7 @@ export type UpdateFromMarketPlacePayload = {
   originalPackageInfo: {
     id: string
     payload: PluginDeclaration
-  },
+  }
   targetPackageInfo: {
     id: string
     version: string
@@ -351,10 +336,6 @@ export type GitHubUrlInfo = {
 }
 
 // endpoint
-export type EndpointOperationResponse = {
-  result: 'success' | 'error'
-}
-
 export type EndpointsResponse = {
   endpoints: EndpointListItem[]
   has_more: boolean
@@ -362,12 +343,6 @@ export type EndpointsResponse = {
   total: number
   page: number
 }
-export type UpdateEndpointRequest = {
-  endpoint_id: string
-  settings: Record<string, any>
-  name: string
-}
-
 export enum InstallStep {
   uploading = 'uploading',
   uploadFailed = 'uploadFailed',
@@ -377,7 +352,7 @@ export enum InstallStep {
   installFailed = 'failed',
 }
 
-export type GitHubAsset = {
+type GitHubAsset = {
   id: number
   name: string
   browser_download_url: string
@@ -389,25 +364,27 @@ export type GitHubRepoReleaseResponse = {
 }
 
 export type InstallPackageResponse = {
-  plugin_unique_identifier: string
+  plugin_unique_identifier?: string
   all_installed: boolean
   task_id: string
+  task?: PluginTaskStart
 }
 
 export type InstallStatusResponse = {
-  status: TaskStatus,
-  taskId: string,
-  uniqueIdentifier: string,
+  status: TaskStatus
+  taskId: string
+  uniqueIdentifier: string
 }
 
 export type InstallStatus = {
-  success: boolean,
+  success: boolean
   isFromMarketPlace?: boolean
 }
 
 export type updatePackageResponse = {
   all_installed: boolean
   task_id: string
+  task?: PluginTaskStart
 }
 
 export type uploadGitHubResponse = {
@@ -422,6 +399,7 @@ export type DebugInfo = {
 }
 
 export enum TaskStatus {
+  pending = 'pending',
   running = 'running',
   success = 'success',
   failed = 'failed',
@@ -430,6 +408,7 @@ export enum TaskStatus {
 export type PluginStatus = {
   plugin_unique_identifier: string
   plugin_id: string
+  source: PluginSource
   status: TaskStatus
   message: string
   icon: string
@@ -447,12 +426,12 @@ export type PluginTask = {
   plugins: PluginStatus[]
 }
 
-export type TaskStatusResponse = {
-  task: PluginTask
+export type PluginTaskStart = Omit<PluginTask, 'plugins'> & {
+  plugins: Array<Omit<PluginStatus, 'taskId'> & { taskId?: string }>
 }
 
-export type PluginTasksResponse = {
-  tasks: PluginTask[]
+export type TaskStatusResponse = {
+  task: PluginTask
 }
 
 export type MetaData = {
@@ -461,13 +440,15 @@ export type MetaData = {
   package: string
 }
 
-export type InstalledPluginListResponse = {
-  plugins: PluginDetail[]
-}
-
 export type InstalledPluginListWithTotalResponse = {
   plugins: PluginDetail[]
   total: number
+}
+
+export type InstalledPluginCategoryListResponse = {
+  plugins: PluginDetail[]
+  builtin_tools: Collection[]
+  has_more: boolean
 }
 
 export type InstalledLatestVersionResponse = {
@@ -506,6 +487,8 @@ export type GitHubItemAndMarketPlaceDependency = {
   type: 'github' | 'marketplace' | 'package'
   value: {
     repo?: string
+    organization?: string // from bundle marketplace dependency
+    plugin?: string // from bundle marketplace dependency
     version?: string // from app DSL
     package?: string // from app DSL
     release?: string // from local package. same to the version
@@ -526,7 +509,7 @@ export type PackageDependency = {
 
 export type Dependency = GitHubItemAndMarketPlaceDependency | PackageDependency
 
-export type Version = {
+type Version = {
   plugin_org: string
   plugin_name: string
   version: string
@@ -541,8 +524,8 @@ export type VersionListResponse = {
 }
 
 export type VersionInfo = {
-  installedId: string, // use to uninstall
-  installedVersion: string,
+  installedId: string // use to uninstall
+  installedVersion: string
   uniqueIdentifier: string
 }
 
@@ -564,7 +547,7 @@ export type StrategyParamItem = {
   options: any[]
   template: {
     enabled: boolean
-  },
+  }
   auto_generate: {
     type: string
   }
@@ -577,14 +560,14 @@ export type StrategyDetail = {
     icon: string
     label: Record<Locale, string>
     provider: string
-  },
+  }
   parameters: StrategyParamItem[]
   description: Record<Locale, string>
   output_schema: Record<string, any>
   features: AgentFeature[]
 }
 
-export type Identity = {
+type Identity = {
   author: string
   name: string
   label: Record<Locale, string>
@@ -594,8 +577,8 @@ export type Identity = {
   tags: string[]
 }
 
-export type StrategyDeclaration = {
-  identity: Identity,
+type StrategyDeclaration = {
+  identity: Identity
   plugin_id: string
   strategies: StrategyDetail[]
 }

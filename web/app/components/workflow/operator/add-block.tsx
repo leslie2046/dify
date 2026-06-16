@@ -1,16 +1,23 @@
+import type { OffsetOptions } from '@floating-ui/react'
+import type {
+  OnSelectBlock,
+} from '@/app/components/workflow/types'
+import { cn } from '@langgenius/dify-ui/cn'
+import { RiAddCircleFill } from '@remixicon/react'
 import {
   memo,
   useCallback,
   useState,
 } from 'react'
-import { RiAddCircleFill } from '@remixicon/react'
-import { useStoreApi } from 'reactflow'
 import { useTranslation } from 'react-i18next'
-import type { OffsetOptions } from '@floating-ui/react'
 import {
-  generateNewNode,
-  getNodeCustomTypeByNodeDataType,
-} from '../utils'
+  useStoreApi,
+} from 'reactflow'
+import BlockSelector from '@/app/components/workflow/block-selector'
+import {
+  BlockEnum,
+} from '@/app/components/workflow/types'
+import { FlowType } from '@/types/common'
 import {
   useAvailableBlocks,
   useIsChatMode,
@@ -20,24 +27,23 @@ import {
 } from '../hooks'
 import { useHooksStore } from '../hooks-store'
 import { useWorkflowStore } from '../store'
-import TipPopup from './tip-popup'
-import cn from '@/utils/classnames'
-import BlockSelector from '@/app/components/workflow/block-selector'
-import type {
-  OnSelectBlock,
-} from '@/app/components/workflow/types'
 import {
-  BlockEnum,
-} from '@/app/components/workflow/types'
-import { FlowType } from '@/types/common'
+  generateNewNode,
+  getNodeCustomTypeByNodeDataType,
+} from '../utils'
+import TipPopup from './tip-popup'
 
 type AddBlockProps = {
   renderTrigger?: (open: boolean) => React.ReactNode
+  renderTriggerAsButtonRoot?: boolean
   offset?: OffsetOptions
+  onClose?: () => void
 }
 const AddBlock = ({
   renderTrigger,
+  renderTriggerAsButtonRoot,
   offset,
+  onClose,
 }: AddBlockProps) => {
   const { t } = useTranslation()
   const store = useStoreApi()
@@ -54,8 +60,8 @@ const AddBlock = ({
   const handleOpenChange = useCallback((open: boolean) => {
     setOpen(open)
     if (!open)
-      handlePaneContextmenuCancel()
-  }, [handlePaneContextmenuCancel])
+      (onClose ?? handlePaneContextmenuCancel)()
+  }, [handlePaneContextmenuCancel, onClose])
 
   const handleSelect = useCallback<OnSelectBlock>((type, pluginDefaultValue) => {
     const {
@@ -87,14 +93,15 @@ const AddBlock = ({
   const renderTriggerElement = useCallback((open: boolean) => {
     return (
       <TipPopup
-        title={t('workflow.common.addBlock')}
+        title={t('common.addBlock', { ns: 'workflow' })}
       >
         <div className={cn(
-          'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-text-tertiary hover:bg-state-base-hover hover:text-text-secondary',
+          'flex size-8 cursor-pointer items-center justify-center rounded-lg text-text-tertiary hover:bg-state-base-hover hover:text-text-secondary',
           `${nodesReadOnly && 'cursor-not-allowed text-text-disabled hover:bg-transparent hover:text-text-disabled'}`,
           open && 'bg-state-accent-active text-text-accent',
-        )}>
-          <RiAddCircleFill className='h-4 w-4' />
+        )}
+        >
+          <RiAddCircleFill className="size-4" />
         </div>
       </TipPopup>
     )
@@ -106,13 +113,14 @@ const AddBlock = ({
       onOpenChange={handleOpenChange}
       disabled={nodesReadOnly}
       onSelect={handleSelect}
-      placement='right-start'
+      placement="right-start"
       offset={offset ?? {
         mainAxis: 4,
         crossAxis: -8,
       }}
       trigger={renderTrigger || renderTriggerElement}
-      popupClassName='!min-w-[256px]'
+      renderTriggerAsButtonRoot={renderTriggerAsButtonRoot}
+      popupClassName="min-w-[256px]!"
       availableBlocksTypes={availableNextBlocks}
       showStartTab={showStartTab}
     />

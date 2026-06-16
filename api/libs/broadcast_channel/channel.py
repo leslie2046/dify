@@ -2,11 +2,13 @@
 Broadcast channel for Pub/Sub messaging.
 """
 
+from __future__ import annotations
+
 import types
 from abc import abstractmethod
 from collections.abc import Iterator
 from contextlib import AbstractContextManager
-from typing import Protocol, Self
+from typing import Protocol, Self, override
 
 
 class Subscription(AbstractContextManager["Subscription"], Protocol):
@@ -35,10 +37,12 @@ class Subscription(AbstractContextManager["Subscription"], Protocol):
         """close closes the subscription, releases any resources associated with it."""
         ...
 
+    @override
     def __enter__(self) -> Self:
         """`__enter__` does the setup logic of the subscription (if any), and return itself."""
         return self
 
+    @override
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -123,12 +127,13 @@ class BroadcastChannel(Protocol):
     a specific topic, all subscription should receive the published message.
 
     There are no restriction for the persistence of messages. Once a subscription is created, it
-    should receive all subsequent messages published.
+    should receive all subsequent messages published. However, a subscription should not receive
+    any message published before the subscription is established.
 
     `BroadcastChannel` implementations must be thread-safe and support concurrent use by multiple threads.
     """
 
     @abstractmethod
-    def topic(self, topic: str) -> "Topic":
+    def topic(self, topic: str) -> Topic:
         """topic returns a `Topic` instance for the given topic name."""
         ...

@@ -1,18 +1,18 @@
 import { useCallback } from 'react'
 import { useStoreApi } from 'reactflow'
+import { useFeaturesStore } from '@/app/components/base/features/hooks'
+import { TriggerType } from '@/app/components/workflow/header/test-run-menu'
+import { useWorkflowInteractions } from '@/app/components/workflow/hooks'
 import { useWorkflowStore } from '@/app/components/workflow/store'
 import {
   BlockEnum,
   WorkflowRunningStatus,
 } from '@/app/components/workflow/types'
-import { useWorkflowInteractions } from '@/app/components/workflow/hooks'
-import { useFeaturesStore } from '@/app/components/base/features/hooks'
 import {
   useIsChatMode,
   useNodesSyncDraft,
   useWorkflowRun,
 } from '.'
-import { TriggerType } from '@/app/components/workflow/header/test-run-menu'
 
 export const useWorkflowStartRun = () => {
   const store = useStoreApi()
@@ -34,6 +34,9 @@ export const useWorkflowStartRun = () => {
     const { getNodes } = store.getState()
     const nodes = getNodes()
     const startNode = nodes.find(node => node.data.type === BlockEnum.Start)
+    if (!startNode)
+      return
+
     const startVariables = startNode?.data.variables || []
     const fileSettings = featuresStore!.getState().features.file
     const {

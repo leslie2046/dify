@@ -1,62 +1,77 @@
+import type { AgentNodeType } from '../nodes/agent/types'
+import type { DataSourceNodeType } from '../nodes/data-source/types'
+import type { KnowledgeBaseNodeType } from '../nodes/knowledge-base/types'
+import type { KnowledgeRetrievalNodeType } from '../nodes/knowledge-retrieval/types'
+import type { ToolNodeType } from '../nodes/tool/types'
+import type { PluginTriggerNodeType } from '../nodes/trigger-plugin/types'
+import type {
+  CommonEdgeType,
+  CommonNodeType,
+  Edge,
+  ModelConfig,
+  Node,
+  ValueSelector,
+} from '../types'
+import type { ModelItem } from '@/app/components/header/account-setting/model-provider-page/declarations'
+import type { Emoji } from '@/app/components/tools/types'
+import type { DataSet } from '@/models/datasets'
+import type { FlowType } from '@/types/common'
+import type { I18nKeysWithPrefix } from '@/types/i18n'
+import { toast } from '@langgenius/dify-ui/toast'
+import { useQueries, useQueryClient } from '@tanstack/react-query'
+import isDeepEqual from 'fast-deep-equal'
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEdges, useStoreApi } from 'reactflow'
-import type {
-  CommonEdgeType,
-  CommonNodeType,
-  Edge,
-  Node,
-  ValueSelector,
-} from '../types'
-import { BlockEnum } from '../types'
+import { useStore as useAppStore } from '@/app/components/app/store'
+import { ModelTypeEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
+import { useModelList } from '@/app/components/header/account-setting/model-provider-page/hooks'
+import useNodes from '@/app/components/workflow/store/workflow/use-nodes'
+import { MAX_TREE_DEPTH } from '@/config'
+import { useGetLanguage } from '@/context/i18n'
+import { useProviderContextSelector } from '@/context/provider-context'
+import { consoleQuery } from '@/service/client'
+import { fetchDatasets } from '@/service/datasets'
+import { useStrategyProviders } from '@/service/use-strategy'
+import {
+  useAllBuiltInTools,
+  useAllCustomTools,
+  useAllMCPTools,
+  useAllWorkflowTools,
+} from '@/service/use-tools'
+import { useAllTriggerPlugins } from '@/service/use-triggers'
+import { AppModeEnum } from '@/types/app'
+import {
+  CUSTOM_NODE,
+} from '../constants'
+import { useDatasetsDetailStore } from '../datasets-detail-store/store'
+import {
+  useGetToolIcon,
+  useNodesMetaData,
+} from '../hooks'
+import { useHooksStore } from '../hooks-store/store'
+import { getNodeUsedVars, isSpecialVar } from '../nodes/_base/components/variable/utils'
+import { IndexMethodEnum } from '../nodes/knowledge-base/types'
+import { getLLMModelIssue, isLLMModelProviderInstalled, LLMModelIssueCode } from '../nodes/llm/utils'
 import {
   useStore,
   useWorkflowStore,
 } from '../store'
+import { BlockEnum } from '../types'
 import {
   getDataSourceCheckParams,
   getToolCheckParams,
   getValidTreeNodes,
 } from '../utils'
+import { extractPluginId } from '../utils/plugin'
+import { isNodePluginMissing } from '../utils/plugin-install-check'
 import { getTriggerCheckParams } from '../utils/trigger'
-import {
-  CUSTOM_NODE,
-} from '../constants'
-import {
-  useGetToolIcon,
-  useNodesMetaData,
-} from '../hooks'
-import type { ToolNodeType } from '../nodes/tool/types'
-import type { DataSourceNodeType } from '../nodes/data-source/types'
-import type { PluginTriggerNodeType } from '../nodes/trigger-plugin/types'
-import { useToastContext } from '@/app/components/base/toast'
-import { useGetLanguage } from '@/context/i18n'
-import type { AgentNodeType } from '../nodes/agent/types'
-import { useStrategyProviders } from '@/service/use-strategy'
-import { useAllTriggerPlugins } from '@/service/use-triggers'
-import { useDatasetsDetailStore } from '../datasets-detail-store/store'
-import type { KnowledgeRetrievalNodeType } from '../nodes/knowledge-retrieval/types'
-import type { DataSet } from '@/models/datasets'
-import { fetchDatasets } from '@/service/datasets'
-import { MAX_TREE_DEPTH } from '@/config'
 import useNodesAvailableVarList, { useGetNodesAvailableVarList } from './use-nodes-available-var-list'
-import { getNodeUsedVars, isSpecialVar } from '../nodes/_base/components/variable/utils'
-import type { Emoji } from '@/app/components/tools/types'
-import { useModelList } from '@/app/components/header/account-setting/model-provider-page/hooks'
-import { ModelTypeEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
-import type { KnowledgeBaseNodeType } from '../nodes/knowledge-base/types'
-import {
-  useAllBuiltInTools,
-  useAllCustomTools,
-  useAllWorkflowTools,
-} from '@/service/use-tools'
-import { useStore as useAppStore } from '@/app/components/app/store'
-import { AppModeEnum } from '@/types/app'
-import useNodes from '@/app/components/workflow/store/workflow/use-nodes'
 
 export type ChecklistItem = {
   id: string
@@ -64,8 +79,23 @@ export type ChecklistItem = {
   title: string
   toolIcon?: string | Emoji
   unConnected?: boolean
-  errorMessage?: string
+  errorMessages: string[]
   canNavigate: boolean
+  disableGoTo?: boolean
+  isPluginMissing?: boolean
+  pluginUniqueIdentifier?: string
+}
+
+type CheckValidExtraData = Record<string, unknown> | undefined
+
+const withFlowType = (moreDataForCheckValid: CheckValidExtraData, flowType?: FlowType) => {
+  if (!flowType)
+    return moreDataForCheckValid
+
+  return {
+    ...(moreDataForCheckValid ?? {}),
+    flowType,
+  }
 }
 
 const START_NODE_TYPES: BlockEnum[] = [
@@ -75,13 +105,51 @@ const START_NODE_TYPES: BlockEnum[] = [
   BlockEnum.TriggerPlugin,
 ]
 
-export const useChecklist = (nodes: Node[], edges: Edge[]) => {
+const getDuplicateEndOutputMessages = (
+  nodes: Node[],
+  t: ReturnType<typeof useTranslation>['t'],
+) => {
+  const variableOccurrences = new Map<string, string[]>()
+
+  nodes.forEach((node) => {
+    if (node.type !== CUSTOM_NODE || node.data.type !== BlockEnum.End)
+      return
+
+    const outputs = ((node.data as { outputs?: Array<{ variable?: string }> }).outputs) || []
+    outputs.forEach((output) => {
+      const variable = output.variable?.trim()
+      if (!variable)
+        return
+
+      const occurrences = variableOccurrences.get(variable) || []
+      occurrences.push(node.id)
+      variableOccurrences.set(variable, occurrences)
+    })
+  })
+
+  const nodeMessages = new Map<string, string[]>()
+  variableOccurrences.forEach((nodeIds, variable) => {
+    if (nodeIds.length <= 1)
+      return
+
+    Array.from(new Set(nodeIds)).forEach((nodeId) => {
+      const messages = nodeMessages.get(nodeId) || []
+      messages.push(t('errorMsg.duplicateOutputVariable', { ns: 'workflow', variable }))
+      nodeMessages.set(nodeId, messages)
+    })
+  })
+
+  return nodeMessages
+}
+
+export const useChecklist = (nodes: Node[], edges: Edge[], options?: { flowType?: FlowType }) => {
   const { t } = useTranslation()
   const language = useGetLanguage()
   const { nodesMap: nodesExtraData } = useNodesMetaData()
   const { data: buildInTools } = useAllBuiltInTools()
   const { data: customTools } = useAllCustomTools()
   const { data: workflowTools } = useAllWorkflowTools()
+  const { data: mcpTools } = useAllMCPTools()
   const dataSourceList = useStore(s => s.dataSourceList)
   const { data: strategyProviders } = useStrategyProviders()
   const { data: triggerPlugins } = useAllTriggerPlugins()
@@ -89,10 +157,49 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
   const getToolIcon = useGetToolIcon()
   const appMode = useAppStore.getState().appDetail?.mode
   const shouldCheckStartNode = appMode === AppModeEnum.WORKFLOW || appMode === AppModeEnum.ADVANCED_CHAT
+  const modelProviders = useProviderContextSelector(s => s.modelProviders)
+  const workflowStore = useWorkflowStore()
 
   const map = useNodesAvailableVarList(nodes)
   const { data: embeddingModelList } = useModelList(ModelTypeEnum.textEmbedding)
   const { data: rerankModelList } = useModelList(ModelTypeEnum.rerank)
+  const knowledgeBaseEmbeddingProviders = useMemo(() => {
+    const providers = new Set<string>()
+
+    nodes.forEach((node) => {
+      if (node.type !== CUSTOM_NODE || node.data.type !== BlockEnum.KnowledgeBase)
+        return
+
+      const knowledgeBaseData = node.data as CommonNodeType<KnowledgeBaseNodeType>
+      if (knowledgeBaseData.indexing_technique !== IndexMethodEnum.QUALIFIED)
+        return
+
+      const provider = knowledgeBaseData.embedding_model_provider
+      if (provider)
+        providers.add(provider)
+    })
+
+    return [...providers]
+  }, [nodes])
+  const knowledgeBaseProviderModelMap = useQueries({
+    queries: knowledgeBaseEmbeddingProviders.map(provider =>
+      consoleQuery.modelProviders.models.queryOptions({
+        input: { params: { provider } },
+        enabled: !!provider,
+        refetchOnWindowFocus: false,
+        select: response => response.data,
+      }),
+    ),
+    combine: (results) => {
+      const modelMap: Partial<Record<string, ModelItem[]>> = {}
+      knowledgeBaseEmbeddingProviders.forEach((provider, index) => {
+        const models = results[index]?.data
+        if (models)
+          modelMap[provider] = models
+      })
+      return modelMap
+    },
+  })
 
   const getCheckData = useCallback((data: CommonNodeType<{}>) => {
     let checkData = data
@@ -109,37 +216,41 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
       } as CommonNodeType<KnowledgeRetrievalNodeType>
     }
     else if (data.type === BlockEnum.KnowledgeBase) {
+      const modelProviderName = (data as CommonNodeType<KnowledgeBaseNodeType>).embedding_model_provider
       checkData = {
         ...data,
         _embeddingModelList: embeddingModelList,
+        _embeddingProviderModelList: modelProviderName ? knowledgeBaseProviderModelMap[modelProviderName] : undefined,
         _rerankModelList: rerankModelList,
       } as CommonNodeType<KnowledgeBaseNodeType>
     }
     return checkData
-  }, [datasetsDetail, embeddingModelList, rerankModelList])
+  }, [datasetsDetail, embeddingModelList, knowledgeBaseProviderModelMap, rerankModelList])
 
   const needWarningNodes = useMemo<ChecklistItem[]>(() => {
     const list: ChecklistItem[] = []
     const filteredNodes = nodes.filter(node => node.type === CUSTOM_NODE)
+    const duplicateEndOutputMessages = getDuplicateEndOutputMessages(filteredNodes, t)
     const { validNodes } = getValidTreeNodes(filteredNodes, edges)
+    const installedPluginIds = new Set(modelProviders.map(p => extractPluginId(p.provider)))
 
     for (let i = 0; i < filteredNodes.length; i++) {
       const node = filteredNodes[i]
-      let moreDataForCheckValid
+      let moreDataForCheckValid: CheckValidExtraData
       let usedVars: ValueSelector[] = []
 
-      if (node.data.type === BlockEnum.Tool)
-        moreDataForCheckValid = getToolCheckParams(node.data as ToolNodeType, buildInTools || [], customTools || [], workflowTools || [], language)
+      if (node!.data.type === BlockEnum.Tool)
+        moreDataForCheckValid = getToolCheckParams(node!.data as ToolNodeType, buildInTools || [], customTools || [], workflowTools || [], language)
 
-      if (node.data.type === BlockEnum.DataSource)
-        moreDataForCheckValid = getDataSourceCheckParams(node.data as DataSourceNodeType, dataSourceList || [], language)
+      if (node!.data.type === BlockEnum.DataSource)
+        moreDataForCheckValid = getDataSourceCheckParams(node!.data as DataSourceNodeType, dataSourceList || [], language)
 
-      if (node.data.type === BlockEnum.TriggerPlugin)
-        moreDataForCheckValid = getTriggerCheckParams(node.data as PluginTriggerNodeType, triggerPlugins, language)
+      if (node!.data.type === BlockEnum.TriggerPlugin)
+        moreDataForCheckValid = getTriggerCheckParams(node!.data as PluginTriggerNodeType, triggerPlugins, language)
 
-      const toolIcon = getToolIcon(node.data)
-      if (node.data.type === BlockEnum.Agent) {
-        const data = node.data as AgentNodeType
+      const toolIcon = getToolIcon(node!.data)
+      if (node!.data.type === BlockEnum.Agent) {
+        const data = node!.data as AgentNodeType
         const isReadyForCheckValid = !!strategyProviders
         const provider = strategyProviders?.find(provider => provider.declaration.identity.name === data.agent_strategy_provider_name)
         const strategy = provider?.declaration.strategies?.find(s => s.identity.name === data.agent_strategy_name)
@@ -151,50 +262,74 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
         }
       }
       else {
-        usedVars = getNodeUsedVars(node).filter(v => v.length > 0)
+        usedVars = getNodeUsedVars(node!).filter(v => v.length > 0)
       }
 
-      if (node.type === CUSTOM_NODE) {
-        const checkData = getCheckData(node.data)
-        const validator = nodesExtraData?.[node.data.type as BlockEnum]?.checkValid
-        let errorMessage = validator ? validator(checkData, t, moreDataForCheckValid).errorMessage : undefined
+      if (node!.type === CUSTOM_NODE) {
+        const checkData = getCheckData(node!.data)
+        const validator = nodesExtraData?.[node!.data.type as BlockEnum]?.checkValid
+        const isPluginMissing = isNodePluginMissing(node!.data, { builtInTools: buildInTools, customTools, workflowTools, mcpTools, triggerPlugins, dataSourceList })
 
-        if (!errorMessage) {
-          const availableVars = map[node.id].availableVars
+        const errorMessages: string[] = []
 
-          for (const variable of usedVars) {
-            const isSpecialVars = isSpecialVar(variable[0])
-            if (!isSpecialVars) {
-              const usedNode = availableVars.find(v => v.nodeId === variable?.[0])
-              if (usedNode) {
-                const usedVar = usedNode.vars.find(v => v.variable === variable?.[1])
-                if (!usedVar)
-                  errorMessage = t('workflow.errorMsg.invalidVariable')
-              }
-              else {
-                errorMessage = t('workflow.errorMsg.invalidVariable')
-              }
-            }
+        if (isPluginMissing) {
+          errorMessages.push(t('nodes.common.pluginNotInstalled', { ns: 'workflow' }))
+        }
+        else {
+          if (node!.data.type === BlockEnum.LLM) {
+            const modelProvider = (node!.data as CommonNodeType<{ model?: ModelConfig }>).model?.provider
+            const modelIssue = getLLMModelIssue({
+              modelProvider,
+              isModelProviderInstalled: isLLMModelProviderInstalled(modelProvider, installedPluginIds),
+            })
+            if (modelIssue === LLMModelIssueCode.providerPluginUnavailable)
+              errorMessages.push(t('errorMsg.configureModel', { ns: 'workflow' }))
           }
+
+          if (validator) {
+            const validationError = validator(checkData, t, withFlowType(moreDataForCheckValid, options?.flowType)).errorMessage
+            if (validationError)
+              errorMessages.push(validationError)
+          }
+
+          const availableVars = map[node!.id]!.availableVars
+          let hasInvalidVar = false
+          for (const variable of usedVars) {
+            if (hasInvalidVar)
+              break
+            if (isSpecialVar(variable[0]!))
+              continue
+            const usedNode = availableVars.find(v => v.nodeId === variable?.[0])
+            if (!usedNode || !usedNode.vars.some(v => v.variable === variable?.[1]))
+              hasInvalidVar = true
+          }
+          if (hasInvalidVar)
+            errorMessages.push(t('errorMsg.invalidVariable', { ns: 'workflow' }))
+
+          errorMessages.push(...(duplicateEndOutputMessages.get(node!.id) || []))
         }
 
-        // Start nodes and Trigger nodes should not show unConnected error if they have validation errors
-        // or if they are valid start nodes (even without incoming connections)
-        const isStartNodeMeta = nodesExtraData?.[node.data.type as BlockEnum]?.metaData.isStart ?? false
-        const canSkipConnectionCheck = shouldCheckStartNode ? isStartNodeMeta : true
+        const isStartNodeMeta = nodesExtraData?.[node!.data.type as BlockEnum]?.metaData.isStart ?? false
+        const isStartPlaceholderNode = node!.data.type === BlockEnum.StartPlaceholder
+        const canSkipConnectionCheck = shouldCheckStartNode ? isStartNodeMeta || isStartPlaceholderNode : true
 
-        const isUnconnected = !validNodes.find(n => n.id === node.id)
-        const shouldShowError = errorMessage || (isUnconnected && !canSkipConnectionCheck)
+        const isUnconnected = !validNodes.some(n => n.id === node!.id)
+        const shouldShowError = errorMessages.length > 0 || (isUnconnected && !canSkipConnectionCheck)
 
         if (shouldShowError) {
           list.push({
-            id: node.id,
-            type: node.data.type,
-            title: node.data.title,
+            id: node!.id,
+            type: node!.data.type,
+            title: node!.data.title,
             toolIcon,
             unConnected: isUnconnected && !canSkipConnectionCheck,
-            errorMessage,
-            canNavigate: true,
+            errorMessages,
+            canNavigate: !isPluginMissing,
+            disableGoTo: isPluginMissing,
+            isPluginMissing,
+            pluginUniqueIdentifier: isPluginMissing
+              ? (node!.data as { plugin_unique_identifier?: string }).plugin_unique_identifier
+              : undefined,
           })
         }
       }
@@ -203,12 +338,13 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
     // Check for start nodes (including triggers)
     if (shouldCheckStartNode) {
       const startNodesFiltered = nodes.filter(node => START_NODE_TYPES.includes(node.data.type as BlockEnum))
-      if (startNodesFiltered.length === 0) {
+      const hasStartPlaceholderNode = nodes.some(node => node.data.type === BlockEnum.StartPlaceholder)
+      if (startNodesFiltered.length === 0 && !hasStartPlaceholderNode) {
         list.push({
           id: 'start-node-required',
           type: BlockEnum.Start,
-          title: t('workflow.panel.startNode'),
-          errorMessage: t('workflow.common.needStartNode'),
+          title: t('panel.startNode', { ns: 'workflow' }),
+          errorMessages: [t('common.needStartNode', { ns: 'workflow' })],
           canNavigate: false,
         })
       }
@@ -217,19 +353,27 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
     const isRequiredNodesType = Object.keys(nodesExtraData!).filter((key: any) => (nodesExtraData as any)[key].metaData.isRequired)
 
     isRequiredNodesType.forEach((type: string) => {
-      if (!filteredNodes.find(node => node.data.type === type)) {
+      if (!filteredNodes.some(node => node.data.type === type)) {
         list.push({
           id: `${type}-need-added`,
           type,
-          title: t(`workflow.blocks.${type}`),
-          errorMessage: t('workflow.common.needAdd', { node: t(`workflow.blocks.${type}`) }),
+          title: t(`blocks.${type}` as I18nKeysWithPrefix<'workflow', 'blocks.'>, { ns: 'workflow' }),
+          errorMessages: [t('common.needAdd', { ns: 'workflow', node: t(`blocks.${type}` as I18nKeysWithPrefix<'workflow', 'blocks.'>, { ns: 'workflow' }) })],
           canNavigate: false,
         })
       }
     })
 
     return list
-  }, [nodes, nodesExtraData, edges, buildInTools, customTools, workflowTools, language, dataSourceList, getToolIcon, strategyProviders, getCheckData, t, map, shouldCheckStartNode])
+  }, [nodes, edges, shouldCheckStartNode, nodesExtraData, buildInTools, customTools, workflowTools, mcpTools, language, dataSourceList, triggerPlugins, getToolIcon, strategyProviders, getCheckData, t, map, modelProviders, options?.flowType])
+
+  useEffect(() => {
+    const currentChecklistItems = workflowStore.getState().checklistItems
+    if (isDeepEqual(currentChecklistItems, needWarningNodes))
+      return
+
+    workflowStore.setState({ checklistItems: needWarningNodes })
+  }, [needWarningNodes, workflowStore])
 
   return needWarningNodes
 }
@@ -237,12 +381,13 @@ export const useChecklist = (nodes: Node[], edges: Edge[]) => {
 export const useChecklistBeforePublish = () => {
   const { t } = useTranslation()
   const language = useGetLanguage()
-  const { notify } = useToastContext()
+  const queryClient = useQueryClient()
   const store = useStoreApi()
   const { nodesMap: nodesExtraData } = useNodesMetaData()
   const { data: strategyProviders } = useStrategyProviders()
+  const modelProviders = useProviderContextSelector(s => s.modelProviders)
   const updateDatasetsDetail = useDatasetsDetailStore(s => s.updateDatasetsDetail)
-  const updateTime = useRef(0)
+  const updateTimeRef = useRef(0)
   const workflowStore = useWorkflowStore()
   const { getNodesAvailableVarList } = useGetNodesAvailableVarList()
   const { data: embeddingModelList } = useModelList(ModelTypeEnum.textEmbedding)
@@ -250,10 +395,15 @@ export const useChecklistBeforePublish = () => {
   const { data: buildInTools } = useAllBuiltInTools()
   const { data: customTools } = useAllCustomTools()
   const { data: workflowTools } = useAllWorkflowTools()
+  const flowType = useHooksStore(s => s.configsMap?.flowType)
   const appMode = useAppStore.getState().appDetail?.mode
   const shouldCheckStartNode = appMode === AppModeEnum.WORKFLOW || appMode === AppModeEnum.ADVANCED_CHAT
 
-  const getCheckData = useCallback((data: CommonNodeType<{}>, datasets: DataSet[]) => {
+  const getCheckData = useCallback((
+    data: CommonNodeType<object>,
+    datasets: DataSet[],
+    embeddingProviderModelMap?: Partial<Record<string, ModelItem[]>>,
+  ) => {
     let checkData = data
     if (data.type === BlockEnum.KnowledgeRetrieval) {
       const datasetIds = (data as CommonNodeType<KnowledgeRetrievalNodeType>).dataset_ids
@@ -272,9 +422,11 @@ export const useChecklistBeforePublish = () => {
       } as CommonNodeType<KnowledgeRetrievalNodeType>
     }
     else if (data.type === BlockEnum.KnowledgeBase) {
+      const modelProviderName = (data as CommonNodeType<KnowledgeBaseNodeType>).embedding_model_provider
       checkData = {
         ...data,
         _embeddingModelList: embeddingModelList,
+        _embeddingProviderModelList: modelProviderName ? embeddingProviderModelMap?.[modelProviderName] : undefined,
         _rerankModelList: rerankModelList,
       } as CommonNodeType<KnowledgeBaseNodeType>
     }
@@ -291,43 +443,87 @@ export const useChecklistBeforePublish = () => {
     } = workflowStore.getState()
     const nodes = getNodes()
     const filteredNodes = nodes.filter(node => node.type === CUSTOM_NODE)
+    const duplicateEndOutputMessages = getDuplicateEndOutputMessages(filteredNodes, t)
     const { validNodes, maxDepth } = getValidTreeNodes(filteredNodes, edges)
 
     if (maxDepth > MAX_TREE_DEPTH) {
-      notify({ type: 'error', message: t('workflow.common.maxTreeDepth', { depth: MAX_TREE_DEPTH }) })
+      toast.error(t('common.maxTreeDepth', { ns: 'workflow', depth: MAX_TREE_DEPTH }))
       return false
     }
-    // Before publish, we need to fetch datasets detail, in case of the settings of datasets have been changed
-    const knowledgeRetrievalNodes = filteredNodes.filter(node => node.data.type === BlockEnum.KnowledgeRetrieval)
-    const allDatasetIds = knowledgeRetrievalNodes.reduce<string[]>((acc, node) => {
-      return Array.from(new Set([...acc, ...(node.data as CommonNodeType<KnowledgeRetrievalNodeType>).dataset_ids]))
-    }, [])
-    let datasets: DataSet[] = []
-    if (allDatasetIds.length > 0) {
-      updateTime.current = updateTime.current + 1
-      const currUpdateTime = updateTime.current
-      const { data: datasetsDetail } = await fetchDatasets({ url: '/datasets', params: { page: 1, ids: allDatasetIds } })
-      if (datasetsDetail && datasetsDetail.length > 0) {
-        // avoid old data to overwrite the new data
-        if (currUpdateTime < updateTime.current)
-          return false
-        datasets = datasetsDetail
-        updateDatasetsDetail(datasetsDetail)
-      }
+
+    const knowledgeBaseEmbeddingProviders = [...new Set(
+      filteredNodes
+        .filter(node => node.data.type === BlockEnum.KnowledgeBase)
+        .map(node => node.data as CommonNodeType<KnowledgeBaseNodeType>)
+        .filter(node => node.indexing_technique === IndexMethodEnum.QUALIFIED)
+        .map(node => node.embedding_model_provider)
+        .filter((provider): provider is string => !!provider),
+    )]
+
+    const fetchKnowledgeBaseProviderModelMap = async () => {
+      const modelMap: Partial<Record<string, ModelItem[]>> = {}
+      await Promise.all(knowledgeBaseEmbeddingProviders.map(async (provider) => {
+        try {
+          const modelList = await queryClient.fetchQuery(
+            consoleQuery.modelProviders.models.queryOptions({
+              input: { params: { provider } },
+            }),
+          )
+
+          if (modelList.data)
+            modelMap[provider] = modelList.data
+        }
+        catch {
+        }
+      }))
+      return modelMap
     }
+
+    const fetchLatestDatasets = async (): Promise<DataSet[] | null> => {
+      const allDatasetIds = new Set<string>()
+      filteredNodes.forEach((node) => {
+        if (node.data.type !== BlockEnum.KnowledgeRetrieval)
+          return
+
+        const datasetIds = (node.data as CommonNodeType<KnowledgeRetrievalNodeType>).dataset_ids
+        datasetIds.forEach(id => allDatasetIds.add(id))
+      })
+
+      if (allDatasetIds.size === 0)
+        return []
+
+      updateTimeRef.current = updateTimeRef.current + 1
+      const currUpdateTime = updateTimeRef.current
+      const { data: datasetsDetail } = await fetchDatasets({ url: '/datasets', params: { page: 1, ids: [...allDatasetIds] } })
+      if (currUpdateTime < updateTimeRef.current)
+        return null
+      if (datasetsDetail?.length)
+        updateDatasetsDetail(datasetsDetail)
+      return datasetsDetail || []
+    }
+
+    const [embeddingProviderModelMap, datasets] = await Promise.all([
+      fetchKnowledgeBaseProviderModelMap(),
+      fetchLatestDatasets(),
+    ])
+
+    if (datasets === null)
+      return false
+
+    const installedPluginIds = new Set(modelProviders.map(p => extractPluginId(p.provider)))
     const map = getNodesAvailableVarList(nodes)
     for (let i = 0; i < filteredNodes.length; i++) {
       const node = filteredNodes[i]
-      let moreDataForCheckValid
+      let moreDataForCheckValid: CheckValidExtraData
       let usedVars: ValueSelector[] = []
-      if (node.data.type === BlockEnum.Tool)
-        moreDataForCheckValid = getToolCheckParams(node.data as ToolNodeType, buildInTools || [], customTools || [], workflowTools || [], language)
+      if (node!.data.type === BlockEnum.Tool)
+        moreDataForCheckValid = getToolCheckParams(node!.data as ToolNodeType, buildInTools || [], customTools || [], workflowTools || [], language)
 
-      if (node.data.type === BlockEnum.DataSource)
-        moreDataForCheckValid = getDataSourceCheckParams(node.data as DataSourceNodeType, dataSourceList || [], language)
+      if (node!.data.type === BlockEnum.DataSource)
+        moreDataForCheckValid = getDataSourceCheckParams(node!.data as DataSourceNodeType, dataSourceList || [], language)
 
-      if (node.data.type === BlockEnum.Agent) {
-        const data = node.data as AgentNodeType
+      if (node!.data.type === BlockEnum.Agent) {
+        const data = node!.data as AgentNodeType
         const isReadyForCheckValid = !!strategyProviders
         const provider = strategyProviders?.find(provider => provider.declaration.identity.name === data.agent_strategy_provider_name)
         const strategy = provider?.declaration.strategies?.find(s => s.identity.name === data.agent_strategy_name)
@@ -339,42 +535,61 @@ export const useChecklistBeforePublish = () => {
         }
       }
       else {
-        usedVars = getNodeUsedVars(node).filter(v => v.length > 0)
+        usedVars = getNodeUsedVars(node!).filter(v => v.length > 0)
       }
-      const checkData = getCheckData(node.data, datasets)
-      const { errorMessage } = nodesExtraData![node.data.type as BlockEnum].checkValid(checkData, t, moreDataForCheckValid)
+
+      if (node!.data.type === BlockEnum.LLM) {
+        const modelProvider = (node!.data as CommonNodeType<{ model?: ModelConfig }>).model?.provider
+        const modelIssue = getLLMModelIssue({
+          modelProvider,
+          isModelProviderInstalled: isLLMModelProviderInstalled(modelProvider, installedPluginIds),
+        })
+        if (modelIssue === LLMModelIssueCode.providerPluginUnavailable) {
+          toast.error(`[${node!.data.title}] ${t('errorMsg.configureModel', { ns: 'workflow' })}`)
+          return false
+        }
+      }
+
+      const checkData = getCheckData(node!.data, datasets, embeddingProviderModelMap)
+      const { errorMessage } = nodesExtraData![node!.data.type as BlockEnum].checkValid(checkData, t, withFlowType(moreDataForCheckValid, flowType))
 
       if (errorMessage) {
-        notify({ type: 'error', message: `[${node.data.title}] ${errorMessage}` })
+        toast.error(`[${node!.data.title}] ${errorMessage}`)
         return false
       }
 
-      const availableVars = map[node.id].availableVars
+      const duplicateOutputMessages = duplicateEndOutputMessages.get(node!.id) || []
+      if (duplicateOutputMessages.length > 0) {
+        toast.error(`[${node!.data.title}] ${duplicateOutputMessages[0]}`)
+        return false
+      }
+
+      const availableVars = map[node!.id]!.availableVars
 
       for (const variable of usedVars) {
-        const isSpecialVars = isSpecialVar(variable[0])
+        const isSpecialVars = isSpecialVar(variable[0]!)
         if (!isSpecialVars) {
           const usedNode = availableVars.find(v => v.nodeId === variable?.[0])
           if (usedNode) {
             const usedVar = usedNode.vars.find(v => v.variable === variable?.[1])
             if (!usedVar) {
-              notify({ type: 'error', message: `[${node.data.title}] ${t('workflow.errorMsg.invalidVariable')}` })
+              toast.error(`[${node!.data.title}] ${t('errorMsg.invalidVariable', { ns: 'workflow' })}`)
               return false
             }
           }
           else {
-            notify({ type: 'error', message: `[${node.data.title}] ${t('workflow.errorMsg.invalidVariable')}` })
+            toast.error(`[${node!.data.title}] ${t('errorMsg.invalidVariable', { ns: 'workflow' })}`)
             return false
           }
         }
       }
 
-      const isStartNodeMeta = nodesExtraData?.[node.data.type as BlockEnum]?.metaData.isStart ?? false
+      const isStartNodeMeta = nodesExtraData?.[node!.data.type as BlockEnum]?.metaData.isStart ?? false
       const canSkipConnectionCheck = shouldCheckStartNode ? isStartNodeMeta : true
-      const isUnconnected = !validNodes.find(n => n.id === node.id)
+      const isUnconnected = !validNodes.some(n => n.id === node!.id)
 
       if (isUnconnected && !canSkipConnectionCheck) {
-        notify({ type: 'error', message: `[${node.data.title}] ${t('workflow.common.needConnectTip')}` })
+        toast.error(`[${node!.data.title}] ${t('common.needConnectTip', { ns: 'workflow' })}`)
         return false
       }
     }
@@ -382,7 +597,7 @@ export const useChecklistBeforePublish = () => {
     if (shouldCheckStartNode) {
       const startNodesFiltered = nodes.filter(node => START_NODE_TYPES.includes(node.data.type as BlockEnum))
       if (startNodesFiltered.length === 0) {
-        notify({ type: 'error', message: t('workflow.common.needStartNode') })
+        toast.error(t('common.needStartNode', { ns: 'workflow' }))
         return false
       }
     }
@@ -392,14 +607,14 @@ export const useChecklistBeforePublish = () => {
     for (let i = 0; i < isRequiredNodesType.length; i++) {
       const type = isRequiredNodesType[i]
 
-      if (!filteredNodes.find(node => node.data.type === type)) {
-        notify({ type: 'error', message: t('workflow.common.needAdd', { node: t(`workflow.blocks.${type}`) }) })
+      if (!filteredNodes.some(node => node.data.type === type)) {
+        toast.error(t('common.needAdd', { ns: 'workflow', node: t(`blocks.${type}` as I18nKeysWithPrefix<'workflow', 'blocks.'>, { ns: 'workflow' }) }))
         return false
       }
     }
 
     return true
-  }, [store, notify, t, language, nodesExtraData, strategyProviders, updateDatasetsDetail, getCheckData, workflowStore, buildInTools, customTools, workflowTools, shouldCheckStartNode])
+  }, [store, workflowStore, getNodesAvailableVarList, shouldCheckStartNode, nodesExtraData, t, updateDatasetsDetail, buildInTools, customTools, workflowTools, language, getCheckData, queryClient, strategyProviders, modelProviders, flowType])
 
   return {
     handleCheckBeforePublish,
@@ -410,16 +625,16 @@ export const useWorkflowRunValidation = () => {
   const { t } = useTranslation()
   const nodes = useNodes()
   const edges = useEdges<CommonEdgeType>()
-  const needWarningNodes = useChecklist(nodes, edges)
-  const { notify } = useToastContext()
+  const flowType = useHooksStore(s => s.configsMap?.flowType)
+  const needWarningNodes = useChecklist(nodes, edges, { flowType })
 
   const validateBeforeRun = useCallback(() => {
     if (needWarningNodes.length > 0) {
-      notify({ type: 'error', message: t('workflow.panel.checklistTip') })
+      toast.error(t('panel.checklistTip', { ns: 'workflow' }))
       return false
     }
     return true
-  }, [needWarningNodes, notify, t])
+  }, [needWarningNodes, t])
 
   return {
     validateBeforeRun,

@@ -1,39 +1,36 @@
-import { useContext } from 'react'
-import {
-  noop,
-} from 'lodash-es'
+import type { FileUpload } from '../../base/features/types'
+import type {
+  BlockEnum,
+  Node,
+  NodeDefault,
+  ToolWithProvider,
+  ValueSelector,
+} from '@/app/components/workflow/types'
+import type { IOtherOptions } from '@/service/base'
+import type { SchemaTypeDefinition } from '@/service/use-common'
+import type { FlowType } from '@/types/common'
+import type { VarInInspect } from '@/types/workflow'
+import { noop } from 'es-toolkit/function'
+import { use } from 'react'
 import {
   useStore as useZustandStore,
 } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { HooksStoreContext } from './provider'
-import type {
-  BlockEnum,
-  NodeDefault,
-  ToolWithProvider,
-} from '@/app/components/workflow/types'
-import type { IOtherOptions } from '@/service/base'
-import type { VarInInspect } from '@/types/workflow'
-import type {
-  Node,
-  ValueSelector,
-} from '@/app/components/workflow/types'
-import type { FlowType } from '@/types/common'
-import type { FileUpload } from '../../base/features/types'
-import type { SchemaTypeDefinition } from '@/service/use-common'
 
 export type AvailableNodesMetaData = {
   nodes: NodeDefault[]
   nodesMap?: Record<BlockEnum, NodeDefault<any>>
 }
-export type CommonHooksFnMap = {
+export type SyncDraftCallback = {
+  onSuccess?: () => void
+  onError?: () => void
+  onSettled?: () => void
+}
+type CommonHooksFnMap = {
   doSyncWorkflowDraft: (
     notRefreshWhenSyncError?: boolean,
-    callback?: {
-      onSuccess?: () => void
-      onError?: () => void
-      onSettled?: () => void,
-    },
+    callback?: SyncDraftCallback,
   ) => Promise<void>
   syncWorkflowDraftWhenPageClose: () => void
   handleRefreshWorkflowDraft: () => void
@@ -50,7 +47,7 @@ export type CommonHooksFnMap = {
   handleWorkflowTriggerPluginRunInWorkflow: (nodeId?: string) => void
   handleWorkflowRunAllTriggersInWorkflow: (nodeIds: string[]) => void
   availableNodesMetaData?: AvailableNodesMetaData
-  getWorkflowRunAndTraceUrl: (runId?: string) => { runUrl: string; traceUrl: string }
+  getWorkflowRunAndTraceUrl: (runId?: string) => { runUrl: string, traceUrl: string }
   exportCheck?: () => Promise<void>
   handleExportDSL?: (include?: boolean, flowId?: string) => Promise<void>
   fetchInspectVars: (params: { passInVars?: boolean, vars?: VarInInspect[], passedInAllPluginInfoList?: Record<string, ToolWithProvider[]>, passedInSchemaTypeDefinitions?: SchemaTypeDefinition[] }) => Promise<void>
@@ -119,6 +116,7 @@ export const createHooksStore = ({
   invalidateSysVarValues = noop,
   resetConversationVar = async () => noop(),
   invalidateConversationVarValues = noop,
+  configsMap,
 }: Partial<Shape>) => {
   return createStore<Shape>(set => ({
     refreshAll: props => set(state => ({ ...state, ...props })),
@@ -156,17 +154,14 @@ export const createHooksStore = ({
     invalidateSysVarValues,
     resetConversationVar,
     invalidateConversationVarValues,
+    configsMap,
   }))
 }
 
 export function useHooksStore<T>(selector: (state: Shape) => T): T {
-  const store = useContext(HooksStoreContext)
+  const store = use(HooksStoreContext)
   if (!store)
     throw new Error('Missing HooksStoreContext.Provider in the tree')
 
   return useZustandStore(store, selector)
-}
-
-export const useHooksStoreApi = () => {
-  return useContext(HooksStoreContext)!
 }

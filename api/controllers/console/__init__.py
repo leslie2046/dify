@@ -33,21 +33,28 @@ for module_name in RESOURCE_MODULES:
 # Ensure resource modules are imported so route decorators are evaluated.
 # Import other controllers
 from . import (
-    admin,
     apikey,
     extension,
     feature,
+    human_input_form,
     init_validate,
+    notification,
     ping,
     setup,
     spec,
     version,
 )
+from .agent import composer as agent_composer
+from .agent import roster as agent_roster
 
 # Import app controllers
 from .app import (
     advanced_prompt_template,
     agent,
+    agent_app_access,
+    agent_app_feature,
+    agent_app_sandbox,
+    agent_drive_inspector,
     annotation,
     app,
     audio,
@@ -63,7 +70,9 @@ from .app import (
     statistic,
     workflow,
     workflow_app_log,
+    workflow_comment,
     workflow_draft_variable,
+    workflow_node_output_inspector,
     workflow_run,
     workflow_statistic,
     workflow_trigger,
@@ -107,11 +116,15 @@ from .datasets.rag_pipeline import (
 
 # Import explore controllers
 from .explore import (
+    banner,
     installed_app,
     parameter,
     recommended_app,
     saved_message,
+    trial,
 )
+from .snippets import snippet_workflow, snippet_workflow_draft_variable
+from .socketio import workflow as socketio_workflow
 
 # Import tag controllers
 from .tag import tags
@@ -126,6 +139,7 @@ from .workspace import (
     model_providers,
     models,
     plugin,
+    snippets,
     tool_providers,
     trigger_providers,
     workspace,
@@ -136,15 +150,21 @@ api.add_namespace(console_ns)
 __all__ = [
     "account",
     "activate",
-    "admin",
     "advanced_prompt_template",
     "agent",
+    "agent_app_access",
+    "agent_app_feature",
+    "agent_app_sandbox",
+    "agent_composer",
+    "agent_drive_inspector",
     "agent_providers",
+    "agent_roster",
     "annotation",
     "api",
     "apikey",
     "app",
     "audio",
+    "banner",
     "billing",
     "bp",
     "completion",
@@ -168,6 +188,7 @@ __all__ = [
     "forgot_password",
     "generator",
     "hit_testing",
+    "human_input_form",
     "init_validate",
     "installed_app",
     "load_balancing_config",
@@ -179,6 +200,7 @@ __all__ = [
     "model_config",
     "model_providers",
     "models",
+    "notification",
     "oauth",
     "oauth_server",
     "ops_trace",
@@ -194,16 +216,23 @@ __all__ = [
     "saved_message",
     "setup",
     "site",
+    "snippet_workflow",
+    "snippet_workflow_draft_variable",
+    "snippets",
+    "socketio_workflow",
     "spec",
     "statistic",
     "tags",
     "tool_providers",
+    "trial",
     "trigger_providers",
     "version",
     "website",
     "workflow",
     "workflow_app_log",
+    "workflow_comment",
     "workflow_draft_variable",
+    "workflow_node_output_inspector",
     "workflow_run",
     "workflow_statistic",
     "workflow_trigger",

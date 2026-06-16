@@ -1,15 +1,32 @@
 from urllib.parse import quote
+from uuid import UUID
 
 from flask import Response, request
-from flask_restx import Resource, reqparse
+from flask_restx import Resource
+from pydantic import BaseModel, Field
 from werkzeug.exceptions import NotFound
 
 import services
 from controllers.common.errors import UnsupportedFileTypeError
+from controllers.common.file_response import enforce_download_for_html
+from controllers.common.schema import register_schema_models
 from controllers.files import files_ns
 from extensions.ext_database import db
 from services.account_service import TenantService
 from services.file_service import FileService
+
+
+class FileSignatureQuery(BaseModel):
+    timestamp: str = Field(..., description="Unix timestamp used in the signature")
+    nonce: str = Field(..., description="Random string for signature")
+    sign: str = Field(..., description="HMAC signature")
+
+
+class FilePreviewQuery(FileSignatureQuery):
+    as_attachment: bool = Field(default=False, description="Whether to download as attachment")
+
+
+register_schema_models(files_ns, FileSignatureQuery, FilePreviewQuery)
 
 
 @files_ns.route("/<uuid:file_id>/image-preview")
@@ -33,19 +50,17 @@ class ImagePreviewApi(Resource):
             415: "Unsupported file type",
         }
     )
-    def get(self, file_id):
-        file_id = str(file_id)
+    def get(self, file_id: UUID):
+        file_id_str = str(file_id)
 
-        timestamp = request.args.get("timestamp")
-        nonce = request.args.get("nonce")
-        sign = request.args.get("sign")
-
-        if not timestamp or not nonce or not sign:
-            return {"content": "Invalid request."}, 400
+        args = FileSignatureQuery.model_validate(request.args.to_dict(flat=True))
+        timestamp = args.timestamp
+        nonce = args.nonce
+        sign = args.sign
 
         try:
             generator, mimetype = FileService(db.engine).get_image_preview(
-                file_id=file_id,
+                file_id=file_id_str,
                 timestamp=timestamp,
                 nonce=nonce,
                 sign=sign,
@@ -77,28 +92,17 @@ class FilePreviewApi(Resource):
             415: "Unsupported file type",
         }
     )
-    def get(self, file_id):
-        file_id = str(file_id)
+    def get(self, file_id: UUID):
+        file_id_str = str(file_id)
 
-        parser = (
-            reqparse.RequestParser()
-            .add_argument("timestamp", type=str, required=True, location="args")
-            .add_argument("nonce", type=str, required=True, location="args")
-            .add_argument("sign", type=str, required=True, location="args")
-            .add_argument("as_attachment", type=bool, required=False, default=False, location="args")
-        )
-
-        args = parser.parse_args()
-
-        if not args["timestamp"] or not args["nonce"] or not args["sign"]:
-            return {"content": "Invalid request."}, 400
+        args = FilePreviewQuery.model_validate(request.args.to_dict(flat=True))
 
         try:
             generator, upload_file = FileService(db.engine).get_file_generator_by_file_id(
-                file_id=file_id,
-                timestamp=args["timestamp"],
-                nonce=args["nonce"],
-                sign=args["sign"],
+                file_id=file_id_str,
+                timestamp=args.timestamp,
+                nonce=args.nonce,
+                sign=args.sign,
             )
         except services.errors.file.UnsupportedFileTypeError:
             raise UnsupportedFileTypeError()
@@ -125,10 +129,17 @@ class FilePreviewApi(Resource):
             response.headers["Accept-Ranges"] = "bytes"
         if upload_file.size > 0:
             response.headers["Content-Length"] = str(upload_file.size)
-        if args["as_attachment"]:
+        if args.as_attachment:
             encoded_filename = quote(upload_file.name)
             response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
-            response.headers["Content-Type"] = "application/octet-stream"
+        response.headers["Content-Type"] = "application/octet-stream"
+
+        enforce_download_for_html(
+            response,
+            mime_type=upload_file.mime_type,
+            filename=upload_file.name,
+            extension=upload_file.extension,
+        )
 
         return response
 
@@ -149,10 +160,10 @@ class WorkspaceWebappLogoApi(Resource):
             415: "Unsupported file type",
         }
     )
-    def get(self, workspace_id):
-        workspace_id = str(workspace_id)
+    def get(self, workspace_id: UUID):
+        workspace_id_str = str(workspace_id)
 
-        custom_config = TenantService.get_custom_config(workspace_id)
+        custom_config = TenantService.get_custom_config(workspace_id_str)
         webapp_logo_file_id = custom_config.get("replace_webapp_logo") if custom_config is not None else None
 
         if not webapp_logo_file_id:

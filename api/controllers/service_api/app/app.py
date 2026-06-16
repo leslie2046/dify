@@ -1,12 +1,32 @@
-from flask_restx import Resource
+from typing import Any, cast
 
-from controllers.common.fields import build_parameters_model
+from flask_restx import Resource
+from pydantic import Field
+
+from controllers.common.fields import Parameters
+from controllers.common.schema import register_response_schema_models
 from controllers.service_api import service_api_ns
 from controllers.service_api.app.error import AppUnavailableError
 from controllers.service_api.wraps import validate_app_token
 from core.app.app_config.common.parameters_mapping import get_parameters_from_feature_dict
+from fields.base import ResponseModel
 from models.model import App, AppMode
 from services.app_service import AppService
+
+
+class AppInfoResponse(ResponseModel):
+    name: str
+    description: str | None
+    tags: list[str]
+    mode: str
+    author_name: str | None
+
+
+class AppMetaResponse(ResponseModel):
+    tool_icons: dict[str, Any] = Field(default_factory=dict)
+
+
+register_response_schema_models(service_api_ns, Parameters, AppMetaResponse, AppInfoResponse)
 
 
 @service_api_ns.route("/parameters")
@@ -22,8 +42,8 @@ class AppParameterApi(Resource):
             404: "Application not found",
         }
     )
+    @service_api_ns.response(200, "Parameters retrieved successfully", service_api_ns.models[Parameters.__name__])
     @validate_app_token
-    @service_api_ns.marshal_with(build_parameters_model(service_api_ns))
     def get(self, app_model: App):
         """Retrieve app parameters.
 
@@ -34,18 +54,19 @@ class AppParameterApi(Resource):
             if workflow is None:
                 raise AppUnavailableError()
 
-            features_dict = workflow.features_dict
+            features_dict: dict[str, Any] = workflow.features_dict
             user_input_form = workflow.user_input_form(to_old_structure=True)
         else:
             app_model_config = app_model.app_model_config
             if app_model_config is None:
                 raise AppUnavailableError()
 
-            features_dict = app_model_config.to_dict()
+            features_dict = cast(dict[str, Any], app_model_config.to_dict())
 
             user_input_form = features_dict.get("user_input_form", [])
 
-        return get_parameters_from_feature_dict(features_dict=features_dict, user_input_form=user_input_form)
+        parameters = get_parameters_from_feature_dict(features_dict=features_dict, user_input_form=user_input_form)
+        return Parameters.model_validate(parameters).model_dump(mode="json")
 
 
 @service_api_ns.route("/meta")
@@ -59,6 +80,7 @@ class AppMetaApi(Resource):
             404: "Application not found",
         }
     )
+    @service_api_ns.response(200, "Metadata retrieved successfully", service_api_ns.models[AppMetaResponse.__name__])
     @validate_app_token
     def get(self, app_model: App):
         """Get app metadata.
@@ -78,6 +100,11 @@ class AppInfoApi(Resource):
             401: "Unauthorized - invalid API token",
             404: "Application not found",
         }
+    )
+    @service_api_ns.response(
+        200,
+        "Application info retrieved successfully",
+        service_api_ns.models[AppInfoResponse.__name__],
     )
     @validate_app_token
     def get(self, app_model: App):

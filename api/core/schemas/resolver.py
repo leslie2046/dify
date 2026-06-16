@@ -3,15 +3,15 @@ import re
 import threading
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Union
+from typing import Any
 
 from core.schemas.registry import SchemaRegistry
 
 logger = logging.getLogger(__name__)
 
 # Type aliases for better clarity
-SchemaType = Union[dict[str, Any], list[Any], str, int, float, bool, None]
-SchemaDict = dict[str, Any]
+type SchemaType = dict[str, Any] | list[Any] | str | int | float | bool | None
+type SchemaDict = dict[str, Any]
 
 # Pre-compiled pattern for better performance
 _DIFY_SCHEMA_PATTERN = re.compile(r"^https://dify\.ai/schemas/(v\d+)/(.+)\.json$")
@@ -54,7 +54,7 @@ class QueueItem:
 
     current: Any
     parent: Any | None
-    key: Union[str, int] | None
+    key: str | int | None
     depth: int
     ref_path: set[str]
 
@@ -125,10 +125,11 @@ class SchemaResolver:
 
     def _process_queue_item(self, queue: deque, item: QueueItem) -> None:
         """Process a single queue item"""
-        if isinstance(item.current, dict):
-            self._process_dict(queue, item)
-        elif isinstance(item.current, list):
-            self._process_list(queue, item)
+        match item.current:
+            case dict():
+                self._process_dict(queue, item)
+            case list():
+                self._process_list(queue, item)
 
     def _process_dict(self, queue: deque, item: QueueItem) -> None:
         """Process a dictionary item"""
@@ -254,7 +255,7 @@ def resolve_dify_schema_refs(
     return resolver.resolve(schema)
 
 
-def _remove_metadata_fields(schema: dict) -> dict:
+def _remove_metadata_fields(schema: dict[str, Any]) -> dict[str, Any]:
     """
     Remove metadata fields from schema that shouldn't be included in resolved output
 

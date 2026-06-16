@@ -3,16 +3,38 @@ import logging
 import threading
 import time
 from collections import OrderedDict
+from typing import TypedDict
 
 from core.model_manager import ModelInstance, ModelManager
-from core.model_runtime.entities.model_entities import ModelType
-from core.model_runtime.errors.invoke import InvokeAuthorizationError
 from core.rag.data_post_processor.reorder import ReorderRunner
+from core.rag.index_processor.constant.query_type import QueryType
 from core.rag.models.document import Document
 from core.rag.rerank.entity.weight import KeywordSetting, VectorSetting, Weights
 from core.rag.rerank.rerank_base import BaseRerankRunner
 from core.rag.rerank.rerank_factory import RerankRunnerFactory
 from core.rag.rerank.rerank_type import RerankMode
+from graphon.model_runtime.entities.model_entities import ModelType
+from graphon.model_runtime.errors.invoke import InvokeAuthorizationError
+
+
+class RerankingModelDict(TypedDict):
+    reranking_provider_name: str
+    reranking_model_name: str
+
+
+class VectorSettingDict(TypedDict):
+    vector_weight: float
+    embedding_provider_name: str
+    embedding_model_name: str
+
+
+class KeywordSettingDict(TypedDict):
+    keyword_weight: float
+
+
+class WeightsDict(TypedDict):
+    vector_setting: VectorSettingDict
+    keyword_setting: KeywordSettingDict
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +64,8 @@ class DataPostProcessor:
         self,
         tenant_id: str,
         reranking_mode: str,
-        reranking_model: dict | None = None,
-        weights: dict | None = None,
+        reranking_model: RerankingModelDict | None = None,
+        weights: WeightsDict | None = None,
         reorder_enabled: bool = False,
     ):
         self.rerank_runner = self._get_rerank_runner(reranking_mode, tenant_id, reranking_model, weights)
@@ -55,10 +77,10 @@ class DataPostProcessor:
         documents: list[Document],
         score_threshold: float | None = None,
         top_n: int | None = None,
-        user: str | None = None,
+        query_type: QueryType = QueryType.TEXT_QUERY,
     ) -> list[Document]:
         if self.rerank_runner:
-            documents = self.rerank_runner.run(query, documents, score_threshold, top_n, user)
+            documents = self.rerank_runner.run(query, documents, score_threshold, top_n, query_type)
 
         if self.reorder_runner:
             documents = self.reorder_runner.run(documents)
@@ -127,8 +149,8 @@ class DataPostProcessor:
         self,
         reranking_mode: str,
         tenant_id: str,
-        reranking_model: dict | None = None,
-        weights: dict | None = None,
+        reranking_model: RerankingModelDict | None = None,
+        weights: WeightsDict | None = None,
     ) -> BaseRerankRunner | None:
         if reranking_mode == RerankMode.WEIGHTED_SCORE and weights:
             runner = RerankRunnerFactory.create_rerank_runner(
@@ -161,50 +183,46 @@ class DataPostProcessor:
             return ReorderRunner()
         return None
 
-    def _get_rerank_model_instance(self, tenant_id: str, reranking_model: dict | None) -> ModelInstance | None:
+    def _get_rerank_model_instance(
+        self, tenant_id: str, reranking_model: RerankingModelDict | None
+    ) -> ModelInstance | None:
         """Get rerank model instance with enhanced caching and double-check locking"""
         if not reranking_model:
             return None
-        
+
         reranking_provider_name = reranking_model.get("reranking_provider_name")
         reranking_model_name = reranking_model.get("reranking_model_name")
-        
+
         if not reranking_provider_name or not reranking_model_name:
             return None
-        
-        # Generate cache key
-        cache_key = self._generate_rerank_model_cache_key(
-            tenant_id, reranking_provider_name, reranking_model_name
-        )
-        
+
+        cache_key = self._generate_rerank_model_cache_key(tenant_id, reranking_provider_name, reranking_model_name)
+
         # First check: without lock (fast path for cache hits)
         if cache_key in self._rerank_model_cache:
             cached_model, cached_time = self._rerank_model_cache[cache_key]
-            
-            # Check TTL expiration
             if not self._is_cache_expired(cached_time):
-                # Cache hit - move to end (mark as recently used)
                 with self._rerank_model_lock:
                     self._rerank_model_cache.move_to_end(cache_key)
                     self._cache_stats["rerank_model_hits"] += 1
-                
                 logger.info(
-                    f"Rerank model cache HIT for tenant_id={tenant_id}, "
-                    f"provider={reranking_provider_name}, model={reranking_model_name}, "
-                    f"age={time.time() - cached_time:.2f}s"
+                    "Rerank model cache HIT for tenant_id=%s, provider=%s, model=%s, age=%.2fs",
+                    tenant_id,
+                    reranking_provider_name,
+                    reranking_model_name,
+                    time.time() - cached_time,
                 )
                 return cached_model
-            else:
-                # Expired - remove from cache
-                with self._rerank_model_lock:
-                    del self._rerank_model_cache[cache_key]
-                    self._cache_stats["rerank_model_expired"] += 1
-                logger.info(
-                    f"Rerank model cache EXPIRED for tenant_id={tenant_id}, "
-                    f"provider={reranking_provider_name}, model={reranking_model_name}"
-                )
-        
-        # Cache miss - load new model
+            with self._rerank_model_lock:
+                del self._rerank_model_cache[cache_key]
+                self._cache_stats["rerank_model_expired"] += 1
+            logger.info(
+                "Rerank model cache EXPIRED for tenant_id=%s, provider=%s, model=%s",
+                tenant_id,
+                reranking_provider_name,
+                reranking_model_name,
+            )
+
         with self._rerank_model_lock:
             # Double-check: another thread might have loaded it
             if cache_key in self._rerank_model_cache:
@@ -213,21 +231,20 @@ class DataPostProcessor:
                     self._rerank_model_cache.move_to_end(cache_key)
                     self._cache_stats["rerank_model_hits"] += 1
                     return cached_model
-            
-            # Record cache miss
+
             self._cache_stats["rerank_model_misses"] += 1
             logger.info(
-                f"Rerank model cache MISS for tenant_id={tenant_id}, "
-                f"provider={reranking_provider_name}, model={reranking_model_name}, loading..."
+                "Rerank model cache MISS for tenant_id=%s, provider=%s, model=%s, loading...",
+                tenant_id,
+                reranking_provider_name,
+                reranking_model_name,
             )
-            
-            # Clean up expired entries
+
             self._cleanup_expired_rerank_models()
-            
-            # Load new model
+
             try:
                 load_start = time.perf_counter()
-                model_manager = ModelManager()
+                model_manager = ModelManager.for_tenant(tenant_id=tenant_id)
                 rerank_model_instance = model_manager.get_model_instance(
                     tenant_id=tenant_id,
                     provider=reranking_provider_name,
@@ -235,25 +252,25 @@ class DataPostProcessor:
                     model=reranking_model_name,
                 )
                 load_duration = time.perf_counter() - load_start
-                
-                logger.info(
-                    f"Rerank model loaded for tenant_id={tenant_id} in {load_duration:.2f}s"
-                )
-                
+
+                logger.info("Rerank model loaded for tenant_id=%s in %.2fs", tenant_id, load_duration)
+
                 # Evict LRU if cache is full
                 if len(self._rerank_model_cache) >= self._RERANK_MODEL_CACHE_MAX_SIZE:
                     logger.warning(
-                        f"Rerank model cache full ({self._RERANK_MODEL_CACHE_MAX_SIZE}), evicting LRU entry"
+                        "Rerank model cache full (%s), evicting LRU entry",
+                        self._RERANK_MODEL_CACHE_MAX_SIZE,
                     )
                     self._evict_lru_rerank_model()
-                
-                # Store in cache with current timestamp
+
                 self._rerank_model_cache[cache_key] = (rerank_model_instance, time.time())
-                
+
                 return rerank_model_instance
             except InvokeAuthorizationError:
                 logger.warning(
-                    f"Authorization error loading rerank model: tenant_id={tenant_id}, "
-                    f"provider={reranking_provider_name}, model={reranking_model_name}"
+                    "Authorization error loading rerank model: tenant_id=%s, provider=%s, model=%s",
+                    tenant_id,
+                    reranking_provider_name,
+                    reranking_model_name,
                 )
                 return None

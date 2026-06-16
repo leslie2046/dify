@@ -3,10 +3,11 @@ import queue
 import threading
 import types
 from collections.abc import Generator, Iterator
-from typing import Self
+from typing import Any, Self, override
 
 from libs.broadcast_channel.channel import Subscription
 from libs.broadcast_channel.exc import SubscriptionClosedError
+from redis import Redis, RedisCluster
 from redis.client import PubSub
 
 _logger = logging.getLogger(__name__)
@@ -22,10 +23,14 @@ class RedisSubscriptionBase(Subscription):
 
     def __init__(
         self,
+        client: Redis | RedisCluster,
         pubsub: PubSub,
         topic: str,
+        *,
+        join_timeout_ms: int = 2000,
     ):
         # The _pubsub is None only if the subscription is closed.
+        self._client = client
         self._pubsub: PubSub | None = pubsub
         self._topic = topic
         self._closed = threading.Event()
@@ -34,6 +39,11 @@ class RedisSubscriptionBase(Subscription):
         self._listener_thread: threading.Thread | None = None
         self._start_lock = threading.Lock()
         self._started = False
+        # Max time close() will wait for the listener thread to finish before
+        # returning. Bounds SSE close tail latency. The listener is a daemon
+        # and exits on its own within one poll window (~1s), so a low value
+        # here just means close() returns sooner without breaking anything.
+        self._join_timeout_ms = max(int(join_timeout_ms or 0), 0)
 
     def _start_if_needed(self) -> None:
         """Start the subscription if not already started."""
@@ -149,12 +159,13 @@ class RedisSubscriptionBase(Subscription):
         """Iterator for consuming messages from the subscription."""
         while not self._closed.is_set():
             try:
-                item = self._queue.get(timeout=0.1)
+                item = self._queue.get(timeout=1)
             except queue.Empty:
                 continue
 
             yield item
 
+    @override
     def __iter__(self) -> Iterator[bytes]:
         """Return an iterator over messages from the subscription."""
         if self._closed.is_set():
@@ -162,7 +173,8 @@ class RedisSubscriptionBase(Subscription):
         self._start_if_needed()
         return iter(self._message_iterator())
 
-    def receive(self, timeout: float | None = None) -> bytes | None:
+    @override
+    def receive(self, timeout: float | None = 0.1) -> bytes | None:
         """Receive the next message from the subscription."""
         if self._closed.is_set():
             raise SubscriptionClosedError(f"The Redis {self._get_subscription_type()} subscription is closed")
@@ -175,11 +187,13 @@ class RedisSubscriptionBase(Subscription):
 
         return item
 
+    @override
     def __enter__(self) -> Self:
         """Context manager entry point."""
         self._start_if_needed()
         return self
 
+    @override
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -190,6 +204,7 @@ class RedisSubscriptionBase(Subscription):
         self.close()
         return None
 
+    @override
     def close(self) -> None:
         """Close the subscription and clean up resources."""
         if self._closed.is_set():
@@ -202,7 +217,7 @@ class RedisSubscriptionBase(Subscription):
         # Due to the restriction above, the PubSub cleanup logic happens inside the consumer thread.
         listener = self._listener_thread
         if listener is not None:
-            listener.join(timeout=1.0)
+            listener.join(timeout=self._join_timeout_ms / 1000.0)
             self._listener_thread = None
 
     # Abstract methods to be implemented by subclasses
@@ -218,7 +233,7 @@ class RedisSubscriptionBase(Subscription):
         """Unsubscribe from the Redis topic using the appropriate command."""
         raise NotImplementedError
 
-    def _get_message(self) -> dict | None:
+    def _get_message(self) -> dict[str, Any] | None:
         """Get a message from Redis using the appropriate method."""
         raise NotImplementedError
 
