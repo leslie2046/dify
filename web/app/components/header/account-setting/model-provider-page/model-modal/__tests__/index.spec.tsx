@@ -1,4 +1,4 @@
-import type * as React from 'react'
+﻿import type * as React from 'react'
 import type { Credential, CredentialFormSchema, ModelProvider } from '../../declarations'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
@@ -297,6 +297,27 @@ describe('ModelModal', () => {
     })
     expect(configModelCredential.onSave).toHaveBeenCalledWith({ __authorization_name__: 'Model Auth', api_key: 'abc' })
     configModelCredential.unmount()
+    
+    mockFormState.responses = [{ isCheckValidated: true, values: { __authorization_name__: 'Fallback Auth', api_key: 'fallback-key' } }]
+    const configModelCredentialWithFixedFields = renderModal({
+      mode: ModelModalModeEnum.configModelCredential,
+      currentCustomConfigurationModelFixedFields: {
+        __model_name: 'bge-reranker-large',
+        __model_type: ModelTypeEnum.rerank,
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'common.operation.save' }))
+    await waitFor(() => {
+      expect(mockHandlers.handleSaveCredential).toHaveBeenCalledWith({
+        credential_id: undefined,
+        credentials: { api_key: 'fallback-key' },
+        name: 'Fallback Auth',
+        model: 'bge-reranker-large',
+        model_type: ModelTypeEnum.rerank,
+      })
+    })
+    expect(configModelCredentialWithFixedFields.onSave).toHaveBeenCalledWith({ __authorization_name__: 'Fallback Auth', api_key: 'fallback-key' })
+    configModelCredentialWithFixedFields.unmount()
 
     mockFormState.responses = [{ isCheckValidated: true, values: { __authorization_name__: 'Provider Auth', api_key: 'provider-key' } }]
     const configProviderCredential = renderModal({ mode: ModelModalModeEnum.configProviderCredential })
@@ -342,7 +363,7 @@ describe('ModelModal', () => {
     const invalidSave = renderModal({ mode: ModelModalModeEnum.configProviderCredential })
     fireEvent.click(screen.getByRole('button', { name: 'common.operation.save' }))
     await waitFor(() => {
-      expect(mockHandlers.handleSaveCredential).toHaveBeenCalledTimes(4)
+      expect(mockHandlers.handleSaveCredential).toHaveBeenCalledTimes(5)
     })
     invalidSave.unmount()
 

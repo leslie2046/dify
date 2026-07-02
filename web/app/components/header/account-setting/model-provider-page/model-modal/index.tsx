@@ -1,5 +1,4 @@
-import type { FC } from 'react'
-import type {
+﻿import type {
   Credential,
   CustomConfigurationModelFixedFields,
   CustomModel,
@@ -67,7 +66,7 @@ type ModelModalProps = {
   mode?: ModelModalModeEnum
 }
 
-const ModelModal: FC<ModelModalProps> = ({
+function ModelModal({
   provider,
   configurateMethod,
   currentCustomConfigurationModelFixedFields,
@@ -77,13 +76,25 @@ const ModelModal: FC<ModelModalProps> = ({
   credential,
   isModelCredential,
   mode = ModelModalModeEnum.configProviderCredential,
-}) => {
+}: ModelModalProps) {
   const renderI18nObject = useRenderI18nObject()
   const providerFormSchemaPredefined = configurateMethod === ConfigurationMethodEnum.predefinedModel
+  const resolvedModel = useMemo(() => {
+    if (model)
+      return model
+
+    if (!currentCustomConfigurationModelFixedFields)
+      return undefined
+
+    return {
+      model: currentCustomConfigurationModelFixedFields.__model_name,
+      model_type: currentCustomConfigurationModelFixedFields.__model_type,
+    }
+  }, [currentCustomConfigurationModelFixedFields, model])
   const {
     isLoading,
     credentialData,
-  } = useCredentialData(provider, providerFormSchemaPredefined, isModelCredential, credential, model)
+  } = useCredentialData(provider, providerFormSchemaPredefined, isModelCredential, credential, resolvedModel)
   const {
     handleSaveCredential,
     handleConfirmDelete,
@@ -114,7 +125,7 @@ const ModelModal: FC<ModelModalProps> = ({
     formValues,
     modelNameAndTypeFormSchemas,
     modelNameAndTypeFormValues,
-  } = useModelFormSchemas(provider, providerFormSchemaPredefined, formSchemasValue, credential, model)
+  } = useModelFormSchemas(provider, providerFormSchemaPredefined, formSchemasValue, credential, resolvedModel)
   const formRef1 = useRef<FormRefObject>(null)
   const [selectedCredential, setSelectedCredential] = useState<Credential & { addNewCredential?: boolean } | undefined>()
   const formRef2 = useRef<FormRefObject>(null)
@@ -127,7 +138,7 @@ const ModelModal: FC<ModelModalProps> = ({
       if (!canUseCredential)
         return
 
-      handleActiveCredential(selectedCredential, model)
+      handleActiveCredential(selectedCredential, resolvedModel)
       onCancel()
       return
     }
@@ -147,17 +158,17 @@ const ModelModal: FC<ModelModalProps> = ({
       modelNameAndTypeValues = formResult.values
     }
 
-    if (mode === ModelModalModeEnum.configModelCredential && model) {
+    if (mode === ModelModalModeEnum.configModelCredential && resolvedModel) {
       modelNameAndTypeValues = {
-        __model_name: model.model,
-        __model_type: model.model_type,
+        __model_name: resolvedModel.model,
+        __model_type: resolvedModel.model_type,
       }
     }
 
-    if (mode === ModelModalModeEnum.addCustomModelToModelList && selectedCredential?.addNewCredential && model) {
+    if (mode === ModelModalModeEnum.addCustomModelToModelList && selectedCredential?.addNewCredential && resolvedModel) {
       modelNameAndTypeValues = {
-        __model_name: model.model,
-        __model_type: model.model_type,
+        __model_name: resolvedModel.model,
+        __model_type: resolvedModel.model_type,
       }
     }
     const {
@@ -195,7 +206,7 @@ const ModelModal: FC<ModelModalProps> = ({
       })
     }
     onSave(values)
-  }, [mode, selectedCredential, model, canUseCredential, canCreateCredential, canManageCredential, onSave, handleActiveCredential, onCancel, handleSaveCredential, credential])
+  }, [mode, selectedCredential, resolvedModel, canUseCredential, canCreateCredential, canManageCredential, onSave, handleActiveCredential, onCancel, handleSaveCredential, credential])
 
   const modalTitle = useMemo(() => {
     let label = t('modelProvider.auth.apiKeyModal.title', { ns: 'common' })
@@ -240,22 +251,22 @@ const ModelModal: FC<ModelModalProps> = ({
         </div>
       )
     }
-    if (model && (mode === ModelModalModeEnum.configModelCredential || mode === ModelModalModeEnum.addCustomModelToModelList)) {
+    if (resolvedModel && (mode === ModelModalModeEnum.configModelCredential || mode === ModelModalModeEnum.addCustomModelToModelList)) {
       return (
         <div className="mt-2 flex items-center">
           <ModelIcon
             className="mr-2 size-4 shrink-0"
             provider={provider}
-            modelName={model.model}
+            modelName={resolvedModel.model}
           />
-          <div className="mr-1 system-md-regular text-text-secondary">{model.model}</div>
-          <Badge>{model.model_type}</Badge>
+          <div className="mr-1 system-md-regular text-text-secondary">{resolvedModel.model}</div>
+          <Badge>{resolvedModel.model_type}</Badge>
         </div>
       )
     }
 
     return null
-  }, [model, provider, mode, renderI18nObject])
+  }, [resolvedModel, provider, mode, renderI18nObject])
 
   const showCredentialLabel = useMemo(() => {
     if (mode === ModelModalModeEnum.configCustomModel)
