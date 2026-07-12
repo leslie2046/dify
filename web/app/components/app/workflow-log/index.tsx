@@ -1,22 +1,24 @@
 'use client'
 import type { FC } from 'react'
-import React, { useState } from 'react'
-import useSWR from 'swr'
-import { useDebounce } from 'ahooks'
-import { omit } from 'lodash-es'
-import dayjs from 'dayjs'
-import utc from 'dayjs/plugin/utc'
-import timezone from 'dayjs/plugin/timezone'
-import { useTranslation } from 'react-i18next'
-import List from './list'
-import Filter, { TIME_PERIOD_MAPPING } from './filter'
-import EmptyElement from '@/app/components/app/log/empty-element'
-import Pagination from '@/app/components/base/pagination'
-import Loading from '@/app/components/base/loading'
-import { fetchWorkflowLogs } from '@/service/log'
-import { APP_PAGE_LIMIT } from '@/config'
 import type { App } from '@/types/app'
-import { useAppContext } from '@/context/app-context'
+import { Pagination } from '@langgenius/dify-ui/pagination'
+import { useQuery } from '@tanstack/react-query'
+import { useDebounce } from 'ahooks'
+import dayjs from 'dayjs'
+import timezone from 'dayjs/plugin/timezone'
+import utc from 'dayjs/plugin/utc'
+import { omit } from 'es-toolkit/object'
+import * as React from 'react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import EmptyElement from '@/app/components/app/log/empty-element'
+import Loading from '@/app/components/base/loading'
+import { APP_PAGE_LIMIT } from '@/config'
+import { userProfileQueryOptions } from '@/features/account-profile/client'
+import { useWorkflowLogs } from '@/service/use-log'
+import PageTitle from '../log-annotation/page-title'
+import Filter, { TIME_PERIOD_MAPPING } from './filter'
+import List from './list'
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
@@ -33,7 +35,10 @@ export type QueryParam = {
 
 const Logs: FC<ILogsProps> = ({ appDetail }) => {
   const { t } = useTranslation()
-  const { userProfile: { timezone } } = useAppContext()
+  const { data: timezone } = useQuery({
+    ...userProfileQueryOptions(),
+    select: data => data.profile.timezone ?? undefined,
+  })
   const [queryParams, setQueryParams] = useState<QueryParam>({ status: 'all', period: '2' })
   const [currPage, setCurrPage] = React.useState<number>(0)
   const debouncedQueryParams = useDebounce(queryParams, { wait: 500 })
@@ -47,41 +52,56 @@ const Logs: FC<ILogsProps> = ({ appDetail }) => {
     ...(debouncedQueryParams.keyword ? { keyword: debouncedQueryParams.keyword } : {}),
     ...((debouncedQueryParams.period !== '9')
       ? {
-        created_at__after: dayjs().subtract(TIME_PERIOD_MAPPING[debouncedQueryParams.period].value, 'day').startOf('day').tz(timezone).format('YYYY-MM-DDTHH:mm:ssZ'),
-        created_at__before: dayjs().endOf('day').tz(timezone).format('YYYY-MM-DDTHH:mm:ssZ'),
-      }
+          created_at__after: dayjs().subtract(TIME_PERIOD_MAPPING[debouncedQueryParams.period]!.value, 'day').startOf('day').tz(timezone).format('YYYY-MM-DDTHH:mm:ssZ'),
+          created_at__before: dayjs().endOf('day').tz(timezone).format('YYYY-MM-DDTHH:mm:ssZ'),
+        }
       : {}),
     ...omit(debouncedQueryParams, ['period', 'status']),
   }
 
-  const { data: workflowLogs, mutate } = useSWR({
-    url: `/apps/${appDetail.id}/workflow-app-logs`,
+  const { data: workflowLogs, refetch: mutate } = useWorkflowLogs({
+    appId: appDetail.id,
     params: query,
-  }, fetchWorkflowLogs)
+  })
   const total = workflowLogs?.total
+  const totalPages = total ? Math.max(Math.ceil(total / limit), 1) : 1
 
   return (
-    <div className='flex h-full flex-col'>
-      <h1 className='system-xl-semibold text-text-primary'>{t('appLog.workflowTitle')}</h1>
-      <p className='system-sm-regular text-text-tertiary'>{t('appLog.workflowSubtitle')}</p>
-      <div className='flex max-h-[calc(100%-16px)] flex-1 flex-col py-4'>
+    <div className="flex h-full flex-col">
+      <PageTitle
+        title={t($ => $.workflowTitle, { ns: 'appLog' })}
+        description={t($ => $.workflowSubtitle, { ns: 'appLog' })}
+      />
+      <div className="flex max-h-[calc(100%-16px)] flex-1 flex-col py-4">
         <Filter queryParams={queryParams} setQueryParams={setQueryParams} />
         {/* workflow log */}
         {total === undefined
-          ? <Loading type='app' />
+          ? <Loading type="app" />
           : total > 0
             ? <List logs={workflowLogs} appDetail={appDetail} onRefresh={mutate} />
-            : <EmptyElement appDetail={appDetail} />
-        }
+            : <EmptyElement appDetail={appDetail} />}
         {/* Show Pagination only if the total is more than the limit */}
         {(total && total > APP_PAGE_LIMIT)
-          ? <Pagination
-            current={currPage}
-            onChange={setCurrPage}
-            total={total}
-            limit={limit}
-            onLimitChange={setLimit}
-          />
+          ? (
+              <Pagination
+                page={currPage + 1}
+                totalPages={totalPages}
+                onPageChange={page => setCurrPage(page - 1)}
+                labels={{
+                  previous: t($ => $['pagination.previous'], { ns: 'common' }),
+                  next: t($ => $['pagination.next'], { ns: 'common' }),
+                  editPageNumber: (page, totalPages) => t($ => $['pagination.editPageNumber'], { ns: 'common', page, totalPages }),
+                  pageNumberInput: t($ => $['pagination.pageNumber'], { ns: 'common' }),
+                }}
+                pageSize={{
+                  value: limit,
+                  options: [10, 25, 50],
+                  onValueChange: setLimit,
+                  label: t($ => $['pagination.perPage'], { ns: 'common' }),
+                  ariaLabel: t($ => $['pagination.perPage'], { ns: 'common' }),
+                }}
+              />
+            )
           : null}
       </div>
     </div>

@@ -1,5 +1,6 @@
 import posixpath
 from collections.abc import Generator
+from typing import override
 
 import oss2 as aliyun_s3
 
@@ -26,11 +27,14 @@ class AliyunOssStorage(BaseStorage):
             self.bucket_name,
             connect_timeout=30,
             region=region,
+            cloudbox_id=dify_config.ALIYUN_CLOUDBOX_ID,
         )
 
+    @override
     def save(self, filename, data):
         self.client.put_object(self.__wrapper_folder_filename(filename), data)
 
+    @override
     def load_once(self, filename: str) -> bytes:
         obj = self.client.get_object(self.__wrapper_folder_filename(filename))
         data = obj.read()
@@ -38,17 +42,21 @@ class AliyunOssStorage(BaseStorage):
             return b""
         return data
 
+    @override
     def load_stream(self, filename: str) -> Generator:
         obj = self.client.get_object(self.__wrapper_folder_filename(filename))
         while chunk := obj.read(4096):
             yield chunk
 
+    @override
     def download(self, filename: str, target_filepath):
         self.client.get_object_to_file(self.__wrapper_folder_filename(filename), target_filepath)
 
+    @override
     def exists(self, filename: str):
         return self.client.object_exists(self.__wrapper_folder_filename(filename))
 
+    @override
     def delete(self, filename: str):
         self.client.delete_object(self.__wrapper_folder_filename(filename))
 

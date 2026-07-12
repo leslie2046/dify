@@ -1,5 +1,31 @@
-import { BlockEnum } from '@/app/components/workflow/types'
+import type { SelectorParam, TFunction } from 'i18next'
 import type { NodeTracing } from '@/types/workflow'
+import { BlockEnum } from '@/app/components/workflow/types'
+
+export type WorkflowTranslate = <const Selector extends SelectorParam<'workflow'>>(
+  selector: Selector,
+  options: { ns: 'workflow' },
+) => ReturnType<TFunction>
+
+const translateWorkflowString = <const Selector extends SelectorParam<'workflow'>>(
+  t: WorkflowTranslate,
+  selector: Selector,
+): string => {
+  const result = t(selector, { ns: 'workflow' })
+  if (typeof result !== 'string')
+    throw new TypeError('Expected workflow translation selector to return a string')
+
+  return result
+}
+
+function findLastIndex<T>(list: T[], predicate: (item: T) => boolean): number {
+  for (let index = list.length - 1; index >= 0; index--) {
+    if (predicate(list[index]!))
+      return index
+  }
+
+  return -1
+}
 
 function printNodeStructure(node: NodeTracing, depth: number) {
   const indent = '  '.repeat(depth)
@@ -12,12 +38,14 @@ function printNodeStructure(node: NodeTracing, depth: number) {
 }
 
 function addTitle({
-  list, depth, belongParallelIndexInfo,
+  list,
+  depth,
+  belongParallelIndexInfo,
 }: {
-  list: NodeTracing[],
-  depth: number,
-  belongParallelIndexInfo?: string,
-}, t: any) {
+  list: NodeTracing[]
+  depth: number
+  belongParallelIndexInfo?: string
+}, t: WorkflowTranslate) {
   let branchIndex = 0
   const hasMoreThanOneParallel = list.filter(node => node.parallelDetail?.isParallelStartNode).length > 1
   list.forEach((node) => {
@@ -42,7 +70,7 @@ function addTitle({
 
     if (isParallelStartNode) {
       node.parallelDetail!.isParallelStartNode = true
-      node.parallelDetail!.parallelTitle = `${t('workflow.common.parallel')}-${parallelIndexInfo}`
+      node.parallelDetail!.parallelTitle = `${translateWorkflowString(t, $ => $['common.parallel'])}-${parallelIndexInfo}`
     }
 
     const isBrachStartNode = parallel_start_node_id === node.node_id
@@ -55,7 +83,7 @@ function addTitle({
         }
       }
 
-      node.parallelDetail!.branchTitle = `${t('workflow.common.branch')}-${belongParallelIndexInfo}-${branchLetter}`
+      node.parallelDetail!.branchTitle = `${translateWorkflowString(t, $ => $['common.branch'])}-${belongParallelIndexInfo}-${branchLetter}`
     }
 
     if (node.parallelDetail?.children && node.parallelDetail.children.length > 0) {
@@ -69,7 +97,7 @@ function addTitle({
 }
 
 // list => group by parallel_id(parallel tree).
-const format = (list: NodeTracing[], t: any, isPrint?: boolean): NodeTracing[] => {
+const format = (list: NodeTracing[], t: WorkflowTranslate, isPrint?: boolean): NodeTracing[] => {
   if (isPrint)
     console.log(list)
 
@@ -105,7 +133,7 @@ const format = (list: NodeTracing[], t: any, isPrint?: boolean): NodeTracing[] =
           }
         }
         if (parentParallelStartNode!.parallelDetail.children) {
-          const sameBranchNodesLastIndex = parentParallelStartNode.parallelDetail.children.findLastIndex((node) => {
+          const sameBranchNodesLastIndex = findLastIndex(parentParallelStartNode.parallelDetail.children, (node) => {
             const currStartNodeId = node.parallel_start_node_id ?? node.execution_metadata?.parallel_start_node_id ?? null
             return currStartNodeId === parentParallelBranchStartNodeId
           })
@@ -122,7 +150,7 @@ const format = (list: NodeTracing[], t: any, isPrint?: boolean): NodeTracing[] =
     const parallelStartNode = result.find(item => parallel_start_node_id === item.node_id)
 
     if (parallelStartNode && parallelStartNode.parallelDetail && parallelStartNode!.parallelDetail!.children) {
-      const sameBranchNodesLastIndex = parallelStartNode.parallelDetail.children.findLastIndex((node) => {
+      const sameBranchNodesLastIndex = findLastIndex(parallelStartNode.parallelDetail.children, (node) => {
         const currStartNodeId = node.parallel_start_node_id ?? node.execution_metadata?.parallel_start_node_id ?? null
         return currStartNodeId === branchStartNodeId
       })

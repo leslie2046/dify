@@ -4,8 +4,10 @@ SQLAlchemy implementation of WorkflowTriggerLogRepository.
 
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from typing import cast, override
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, delete, func, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from models.enums import WorkflowTriggerStatus
@@ -23,18 +25,21 @@ class SQLAlchemyWorkflowTriggerLogRepository(WorkflowTriggerLogRepository):
     def __init__(self, session: Session):
         self.session = session
 
+    @override
     def create(self, trigger_log: WorkflowTriggerLog) -> WorkflowTriggerLog:
         """Create a new trigger log entry."""
         self.session.add(trigger_log)
         self.session.flush()
         return trigger_log
 
+    @override
     def update(self, trigger_log: WorkflowTriggerLog) -> WorkflowTriggerLog:
         """Update an existing trigger log entry."""
         self.session.merge(trigger_log)
         self.session.flush()
         return trigger_log
 
+    @override
     def get_by_id(self, trigger_log_id: str, tenant_id: str | None = None) -> WorkflowTriggerLog | None:
         """Get a trigger log by its ID."""
         query = select(WorkflowTriggerLog).where(WorkflowTriggerLog.id == trigger_log_id)
@@ -44,6 +49,12 @@ class SQLAlchemyWorkflowTriggerLogRepository(WorkflowTriggerLogRepository):
 
         return self.session.scalar(query)
 
+    def list_by_run_id(self, run_id: str) -> Sequence[WorkflowTriggerLog]:
+        """List trigger logs for a workflow run."""
+        query = select(WorkflowTriggerLog).where(WorkflowTriggerLog.workflow_run_id == run_id)
+        return list(self.session.scalars(query).all())
+
+    @override
     def get_failed_for_retry(
         self, tenant_id: str, max_retry_count: int = 3, limit: int = 100
     ) -> Sequence[WorkflowTriggerLog]:
@@ -63,6 +74,7 @@ class SQLAlchemyWorkflowTriggerLogRepository(WorkflowTriggerLogRepository):
 
         return list(self.session.scalars(query).all())
 
+    @override
     def get_recent_logs(
         self, tenant_id: str, app_id: str, hours: int = 24, limit: int = 100, offset: int = 0
     ) -> Sequence[WorkflowTriggerLog]:
@@ -84,3 +96,49 @@ class SQLAlchemyWorkflowTriggerLogRepository(WorkflowTriggerLogRepository):
         )
 
         return list(self.session.scalars(query).all())
+
+    @override
+    def get_by_workflow_run_id(self, workflow_run_id: str) -> WorkflowTriggerLog | None:
+        """Get the trigger log associated with a workflow run."""
+        query = (
+            select(WorkflowTriggerLog)
+            .where(WorkflowTriggerLog.workflow_run_id == workflow_run_id)
+            .order_by(WorkflowTriggerLog.created_at.desc())
+            .limit(1)
+        )
+        return self.session.scalar(query)
+
+    @override
+    def delete_by_run_ids(self, run_ids: Sequence[str]) -> int:
+        """
+        Delete trigger logs associated with the given workflow run ids.
+
+        Args:
+            run_ids: Collection of workflow run identifiers.
+
+        Returns:
+            Number of rows deleted.
+        """
+        if not run_ids:
+            return 0
+
+        result = self.session.execute(delete(WorkflowTriggerLog).where(WorkflowTriggerLog.workflow_run_id.in_(run_ids)))
+        return cast(CursorResult, result).rowcount or 0
+
+    def count_by_run_ids(self, run_ids: Sequence[str]) -> int:
+        """
+        Count trigger logs associated with the given workflow run ids.
+
+        Args:
+            run_ids: Collection of workflow run identifiers.
+
+        Returns:
+            Number of rows matched.
+        """
+        if not run_ids:
+            return 0
+
+        count = self.session.scalar(
+            select(func.count()).select_from(WorkflowTriggerLog).where(WorkflowTriggerLog.workflow_run_id.in_(run_ids))
+        )
+        return int(count or 0)

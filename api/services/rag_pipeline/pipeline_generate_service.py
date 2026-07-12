@@ -1,11 +1,13 @@
 from collections.abc import Mapping
-from typing import Any, Union
+from typing import Any
+
+from sqlalchemy.orm import Session
 
 from configs import dify_config
 from core.app.apps.pipeline.pipeline_generator import PipelineGenerator
 from core.app.entities.app_invoke_entities import InvokeFrom
-from extensions.ext_database import db
 from models.dataset import Document, Pipeline
+from models.enums import IndexingStatus
 from models.model import Account, App, EndUser
 from models.workflow import Workflow
 from services.rag_pipeline.rag_pipeline import RagPipelineService
@@ -16,10 +18,12 @@ class PipelineGenerateService:
     def generate(
         cls,
         pipeline: Pipeline,
-        user: Union[Account, EndUser],
+        user: Account | EndUser,
         args: Mapping[str, Any],
         invoke_from: InvokeFrom,
         streaming: bool = True,
+        *,
+        session: Session,
     ):
         """
         Pipeline Content Generate
@@ -31,10 +35,10 @@ class PipelineGenerateService:
         :return:
         """
         try:
-            workflow = cls._get_workflow(pipeline, invoke_from)
+            workflow = cls._get_workflow(pipeline, invoke_from, session)
             if original_document_id := args.get("original_document_id"):
                 # update document status to waiting
-                cls.update_document_status(original_document_id)
+                cls.update_document_status(original_document_id, session=session)
             return PipelineGenerator.convert_to_event_stream(
                 PipelineGenerator().generate(
                     pipeline=pipeline,
@@ -53,16 +57,17 @@ class PipelineGenerateService:
 
     @staticmethod
     def _get_max_active_requests(app_model: App) -> int:
-        max_active_requests = app_model.max_active_requests
-        if max_active_requests is None:
-            max_active_requests = int(dify_config.APP_MAX_ACTIVE_REQUESTS)
-        return max_active_requests
+        app_limit = app_model.max_active_requests or dify_config.APP_DEFAULT_ACTIVE_REQUESTS
+        config_limit = dify_config.APP_MAX_ACTIVE_REQUESTS
+        # Filter out infinite (0) values and return the minimum, or 0 if both are infinite
+        limits = [limit for limit in [app_limit, config_limit] if limit > 0]
+        return min(limits) if limits else 0
 
     @classmethod
     def generate_single_iteration(
-        cls, pipeline: Pipeline, user: Account, node_id: str, args: Any, streaming: bool = True
+        cls, pipeline: Pipeline, user: Account, node_id: str, args: Any, session: Session, streaming: bool = True
     ):
-        workflow = cls._get_workflow(pipeline, InvokeFrom.DEBUGGER)
+        workflow = cls._get_workflow(pipeline, InvokeFrom.DEBUGGER, session)
         return PipelineGenerator.convert_to_event_stream(
             PipelineGenerator().single_iteration_generate(
                 pipeline=pipeline, workflow=workflow, node_id=node_id, user=user, args=args, streaming=streaming
@@ -70,8 +75,10 @@ class PipelineGenerateService:
         )
 
     @classmethod
-    def generate_single_loop(cls, pipeline: Pipeline, user: Account, node_id: str, args: Any, streaming: bool = True):
-        workflow = cls._get_workflow(pipeline, InvokeFrom.DEBUGGER)
+    def generate_single_loop(
+        cls, pipeline: Pipeline, user: Account, node_id: str, args: Any, session: Session, streaming: bool = True
+    ):
+        workflow = cls._get_workflow(pipeline, InvokeFrom.DEBUGGER, session)
         return PipelineGenerator.convert_to_event_stream(
             PipelineGenerator().single_loop_generate(
                 pipeline=pipeline, workflow=workflow, node_id=node_id, user=user, args=args, streaming=streaming
@@ -79,14 +86,14 @@ class PipelineGenerateService:
         )
 
     @classmethod
-    def _get_workflow(cls, pipeline: Pipeline, invoke_from: InvokeFrom) -> Workflow:
+    def _get_workflow(cls, pipeline: Pipeline, invoke_from: InvokeFrom, session: Session) -> Workflow:
         """
         Get workflow
         :param pipeline: pipeline
         :param invoke_from: invoke from
         :return:
         """
-        rag_pipeline_service = RagPipelineService()
+        rag_pipeline_service = RagPipelineService(session)
         if invoke_from == InvokeFrom.DEBUGGER:
             # fetch draft workflow by app_model
             workflow = rag_pipeline_service.get_draft_workflow(pipeline=pipeline)
@@ -103,13 +110,12 @@ class PipelineGenerateService:
         return workflow
 
     @classmethod
-    def update_document_status(cls, document_id: str):
+    def update_document_status(cls, document_id: str, *, session: Session):
         """
         Update document status to waiting
         :param document_id: document id
         """
-        document = db.session.query(Document).where(Document.id == document_id).first()
+        document = session.get(Document, document_id)
         if document:
-            document.indexing_status = "waiting"
-            db.session.add(document)
-            db.session.commit()
+            document.indexing_status = IndexingStatus.WAITING
+            session.add(document)

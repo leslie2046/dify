@@ -1,17 +1,18 @@
-import { useMemo } from 'react'
 import type { AvailableNodesMetaData } from '@/app/components/workflow/hooks-store'
-import { useHooksStore } from '@/app/components/workflow/hooks-store'
-import { BlockEnum } from '@/app/components/workflow/types'
 import type { Node } from '@/app/components/workflow/types'
+import { useMemo } from 'react'
 import { CollectionType } from '@/app/components/tools/types'
+import { useHooksStore } from '@/app/components/workflow/hooks-store'
 import { useStore } from '@/app/components/workflow/store'
-import { canFindTool } from '@/utils'
+import { BlockEnum } from '@/app/components/workflow/types'
+import { getNodeCatalogType } from '@/app/components/workflow/utils/node'
 import { useGetLanguage } from '@/context/i18n'
 import {
   useAllBuiltInTools,
   useAllCustomTools,
   useAllWorkflowTools,
 } from '@/service/use-tools'
+import { canFindTool } from '@/utils'
 
 export const useNodesMetaData = () => {
   const availableNodesMetaData = useHooksStore(s => s.availableNodesMetaData)
@@ -32,7 +33,7 @@ export const useNodeMetaData = (node: Node) => {
   const dataSourceList = useStore(s => s.dataSourceList)
   const availableNodesMetaData = useNodesMetaData()
   const { data } = node
-  const nodeMetaData = availableNodesMetaData.nodesMap?.[data.type]
+  const nodeMetaData = availableNodesMetaData.nodesMap?.[getNodeCatalogType(data)]
   const author = useMemo(() => {
     if (data.type === BlockEnum.DataSource)
       return dataSourceList?.find(dataSource => dataSource.plugin_id === data.plugin_id)?.author

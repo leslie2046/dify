@@ -1,17 +1,18 @@
 'use client'
+import type { FC } from 'react'
 import type { ResultPanelProps } from '@/app/components/workflow/run/result-panel'
+import type { NodeTracing } from '@/types/workflow'
+import { RiLoader2Line } from '@remixicon/react'
+import * as React from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useHooksStore } from '@/app/components/workflow/hooks-store'
 import ResultPanel from '@/app/components/workflow/run/result-panel'
 import { NodeRunningStatus } from '@/app/components/workflow/types'
-import type { FC } from 'react'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import NoData from './no-data'
 import { useLastRun } from '@/service/use-workflow'
-import { RiLoader2Line } from '@remixicon/react'
-import type { NodeTracing } from '@/types/workflow'
-import { useHooksStore } from '@/app/components/workflow/hooks-store'
 import { FlowType } from '@/types/common'
+import NoData from './no-data'
 
-type Props = {
+type Props = Readonly<{
   appId: string
   nodeId: string
   canSingleRun: boolean
@@ -22,7 +23,7 @@ type Props = {
   onSingleRunClicked: () => void
   singleRunResult?: NodeTracing
   isPaused?: boolean
-} & Partial<ResultPanelProps>
+}> & Partial<ResultPanelProps>
 
 const LastRun: FC<Props> = ({
   appId: _appId,
@@ -49,10 +50,10 @@ const LastRun: FC<Props> = ({
   const canRunLastRun = !isRunAfterSingleRun || isOneStepRunSucceed || isOneStepRunFailed || (pageHasHide && hidePageOneStepRunFinished)
   const { data: lastRunResult, isFetching, error } = useLastRun(configsMap?.flowType || FlowType.appFlow, configsMap?.flowId || '', nodeId, canRunLastRun)
   const isRunning = useMemo(() => {
-    if(isPaused)
+    if (isPaused)
       return false
 
-    if(!isRunAfterSingleRun)
+    if (!isRunAfterSingleRun)
       return isFetching
     return [NodeRunningStatus.Running, NodeRunningStatus.NotStart].includes(oneStepRunRunningStatus!)
   }, [isFetching, isPaused, isRunAfterSingleRun, oneStepRunRunningStatus])
@@ -86,7 +87,7 @@ const LastRun: FC<Props> = ({
   }, [isOneStepRunSucceed, isOneStepRunFailed, oneStepRunRunningStatus])
 
   useEffect(() => {
-    if([NodeRunningStatus.Succeeded, NodeRunningStatus.Failed].includes(oneStepRunRunningStatus!))
+    if ([NodeRunningStatus.Succeeded, NodeRunningStatus.Failed].includes(oneStepRunRunningStatus!))
       setHidePageOneStepFinishedStatus(oneStepRunRunningStatus!)
   }, [oneStepRunRunningStatus])
 
@@ -110,13 +111,14 @@ const LastRun: FC<Props> = ({
 
   if (isFetching && !isRunAfterSingleRun) {
     return (
-      <div className='flex h-0 grow flex-col items-center justify-center'>
-        <RiLoader2Line className='size-4 animate-spin text-text-tertiary' />
-      </div>)
+      <div className="flex h-0 grow flex-col items-center justify-center">
+        <RiLoader2Line className="size-4 animate-spin text-text-tertiary" />
+      </div>
+    )
   }
 
   if (isRunning)
-    return <ResultPanel status='running' showSteps={false} />
+    return <ResultPanel status="running" showSteps={false} />
   if (!isPaused && (noLastRun || !runResult)) {
     return (
       <NoData canSingleRun={canSingleRun} onSingleRun={onSingleRunClicked} />

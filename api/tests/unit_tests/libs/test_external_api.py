@@ -6,6 +6,7 @@ from constants import COOKIE_NAME_ACCESS_TOKEN, COOKIE_NAME_CSRF_TOKEN, COOKIE_N
 from core.errors.error import AppInvokeQuotaExceededError
 from libs.exception import BaseHTTPException
 from libs.external_api import ExternalApi
+from libs.rate_limit import _BearerRateLimited
 
 
 def _create_api_app():
@@ -58,6 +59,13 @@ def _create_api_app():
             e.description = {"field": "is required"}
             raise e
 
+    # The per-token rate limit raises this; ExternalApi must carry its Retry-After header to the
+    # wire (it reads getattr(e, "headers"), not werkzeug's get_headers()).
+    @api.route("/rate-limited")
+    class RateLimited(Resource):
+        def get(self):
+            raise _BearerRateLimited(23)
+
     app.register_blueprint(bp, url_prefix="/api")
     return app
 
@@ -99,29 +107,30 @@ def test_external_api_json_message_and_bad_request_rewrite():
     assert res.get_json()["message"] == "Invalid JSON payload received or JSON payload is empty."
 
 
-def test_external_api_param_mapping_and_quota_and_exc_info_none():
-    # Force exc_info() to return (None,None,None) only during request
-    import libs.external_api as ext
+def test_external_api_param_mapping_and_quota():
+    app = _create_api_app()
+    client = app.test_client()
 
-    orig_exc_info = ext.sys.exc_info
-    try:
-        ext.sys.exc_info = lambda: (None, None, None)
+    # Param errors mapping payload path
+    res = client.get("/api/param-errors")
+    assert res.status_code == 400
+    data = res.get_json()
+    assert data["code"] == "invalid_param"
+    assert data["params"] == "field"
 
-        app = _create_api_app()
-        client = app.test_client()
+    # Quota path — depending on Flask-RESTX internals it may be handled
+    res = client.get("/api/quota")
+    assert res.status_code in (400, 429)
 
-        # Param errors mapping payload path
-        res = client.get("/api/param-errors")
-        assert res.status_code == 400
-        data = res.get_json()
-        assert data["code"] == "invalid_param"
-        assert data["params"] == "field"
 
-        # Quota path — depending on Flask-RESTX internals it may be handled
-        res = client.get("/api/quota")
-        assert res.status_code in (400, 429)
-    finally:
-        ext.sys.exc_info = orig_exc_info  # type: ignore[assignment]
+def test_external_api_carries_exception_headers_to_429_response():
+    # Locks the coupling enforce_bearer_rate_limit relies on: handle_error reads getattr(e,
+    # "headers") and puts it on the response, so Retry-After reaches the wire.
+    app = _create_api_app()
+    res = app.test_client().get("/api/rate-limited")
+    assert res.status_code == 429
+    assert res.headers["Retry-After"] == "23"
+    assert (res.get_json() or {})["status"] == 429
 
 
 def test_unauthorized_and_force_logout_clears_cookies():

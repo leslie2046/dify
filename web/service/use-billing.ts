@@ -1,19 +1,34 @@
-import { useMutation } from '@tanstack/react-query'
-import { put } from './base'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { consoleClient, consoleQuery } from '@/service/client'
+import { fetchCurrentPlanVectorSpace } from './billing'
 
-const NAME_SPACE = 'billing'
+const currentPlanVectorSpaceQueryKey = ['billing', 'current-plan-vector-space'] as const
 
 export const useBindPartnerStackInfo = () => {
   return useMutation({
-    mutationKey: [NAME_SPACE, 'bind-partner-stack'],
-    mutationFn: (data: { partnerKey: string; clickId: string }) => {
-      return put(`/billing/partners/${data.partnerKey}/tenants`, {
-        body: {
-          click_id: data.clickId,
-        },
-      }, {
-        silent: true,
-      })
+    mutationKey: consoleQuery.billing.partners.byPartnerKey.tenants.put.mutationKey(),
+    mutationFn: (data: { partnerKey: string, clickId: string }) => consoleClient.billing.partners.byPartnerKey.tenants.put({
+      params: { partner_key: data.partnerKey },
+      body: { click_id: data.clickId },
+    }),
+  })
+}
+
+export const useBillingUrl = (enabled: boolean) => {
+  return useQuery({
+    queryKey: consoleQuery.billing.invoices.get.queryKey(),
+    enabled,
+    queryFn: async () => {
+      const res = await consoleClient.billing.invoices.get()
+      return res.url
     },
+  })
+}
+
+export const useCurrentPlanVectorSpace = (enabled = true) => {
+  return useQuery({
+    queryKey: currentPlanVectorSpaceQueryKey,
+    queryFn: () => fetchCurrentPlanVectorSpace(),
+    enabled,
   })
 }

@@ -1,32 +1,32 @@
+import type {
+  BlockDefaultValue,
+  TriggerDefaultValue,
+} from '@/app/components/workflow/block-selector/types'
+import type { EnvironmentVariable } from '@/app/components/workflow/types'
 import {
   memo,
   useCallback,
   useState,
 } from 'react'
-import type { EnvironmentVariable } from '@/app/components/workflow/types'
-import { DSL_EXPORT_CHECK } from '@/app/components/workflow/constants'
-import { START_INITIAL_POSITION } from '@/app/components/workflow/constants'
-import { generateNewNode } from '@/app/components/workflow/utils'
-import { useStore } from '@/app/components/workflow/store'
 import { useStoreApi } from 'reactflow'
-import PluginDependency from '../../workflow/plugin-dependency'
+import { DSL_EXPORT_CHECK, START_INITIAL_POSITION } from '@/app/components/workflow/constants'
 import {
   useAutoGenerateWebhookUrl,
   useDSL,
   usePanelInteractions,
 } from '@/app/components/workflow/hooks'
+import { useHooksStore } from '@/app/components/workflow/hooks-store'
 import { useNodesSyncDraft } from '@/app/components/workflow/hooks/use-nodes-sync-draft'
+import { useStore } from '@/app/components/workflow/store'
+import { BlockEnum } from '@/app/components/workflow/types'
+import { generateNewNode } from '@/app/components/workflow/utils'
 import { useEventEmitterContextContext } from '@/context/event-emitter'
+import dynamic from '@/next/dynamic'
+import PluginDependency from '../../workflow/plugin-dependency'
+import { useAvailableNodesMetaData } from '../hooks'
+import { useAutoOnboarding } from '../hooks/use-auto-onboarding'
 import WorkflowHeader from './workflow-header'
 import WorkflowPanel from './workflow-panel'
-import dynamic from 'next/dynamic'
-import { BlockEnum } from '@/app/components/workflow/types'
-import type {
-  PluginDefaultValue,
-  TriggerDefaultValue,
-} from '@/app/components/workflow/block-selector/types'
-import { useAutoOnboarding } from '../hooks/use-auto-onboarding'
-import { useAvailableNodesMetaData } from '../hooks'
 
 const Features = dynamic(() => import('@/app/components/workflow/features'), {
   ssr: false,
@@ -73,6 +73,8 @@ const WorkflowChildren = () => {
   const showImportDSLModal = useStore(s => s.showImportDSLModal)
   const setShowImportDSLModal = useStore(s => s.setShowImportDSLModal)
   const showOnboarding = useStore(s => s.showOnboarding)
+  const canImportExportDSL = useHooksStore(s => s.accessControl.canImportExportDSL)
+  const canEdit = useHooksStore(s => s.accessControl.canEdit)
   const setShowOnboarding = useStore(s => s.setShowOnboarding)
   const setHasSelectedStartNode = useStore(s => s.setHasSelectedStartNode)
   const setShouldAutoOpenStartNodeSelector = useStore(s => s.setShouldAutoOpenStartNodeSelector)
@@ -99,7 +101,10 @@ const WorkflowChildren = () => {
     handleOnboardingClose()
   }, [handleOnboardingClose])
 
-  const handleSelectStartNode = useCallback((nodeType: BlockEnum, toolConfig?: PluginDefaultValue) => {
+  const handleSelectStartNode = useCallback((nodeType: BlockEnum, toolConfig?: BlockDefaultValue) => {
+    if (!canEdit)
+      return
+
     const nodeDefault = availableNodesMetaData.nodesMap?.[nodeType]
     if (!nodeDefault?.defaultValue)
       return
@@ -148,13 +153,12 @@ const WorkflowChildren = () => {
     handleSyncWorkflowDraft(true, false, {
       onSuccess: () => {
         autoGenerateWebhookUrl(newNode.id)
-        console.log('Node successfully saved to draft')
       },
       onError: () => {
         console.error('Failed to save node to draft')
       },
     })
-  }, [availableNodesMetaData, setShowOnboarding, setHasSelectedStartNode, reactFlowStore, handleSyncWorkflowDraft])
+  }, [availableNodesMetaData, autoGenerateWebhookUrl, canEdit, handleSyncWorkflowDraft, reactFlowStore, setHasSelectedStartNode, setShouldAutoOpenStartNodeSelector, setShowOnboarding])
 
   return (
     <>
@@ -163,7 +167,7 @@ const WorkflowChildren = () => {
         showFeaturesPanel && <Features />
       }
       {
-        showOnboarding && (
+        canEdit && showOnboarding && (
           <WorkflowOnboardingModal
             isShow={showOnboarding}
             onClose={handleCloseOnboarding}
@@ -172,7 +176,7 @@ const WorkflowChildren = () => {
         )
       }
       {
-        showImportDSLModal && (
+        canImportExportDSL && showImportDSLModal && (
           <UpdateDSLModal
             onCancel={() => setShowImportDSLModal(false)}
             onBackup={exportCheck!}
@@ -181,7 +185,7 @@ const WorkflowChildren = () => {
         )
       }
       {
-        secretEnvList.length > 0 && (
+        canImportExportDSL && secretEnvList.length > 0 && (
           <DSLExportConfirmModal
             envList={secretEnvList}
             onConfirm={handleExportDSL!}

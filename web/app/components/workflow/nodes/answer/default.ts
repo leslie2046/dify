@@ -1,7 +1,8 @@
+import type { TFunction } from 'i18next'
 import type { NodeDefault } from '../../types'
 import type { AnswerNodeType } from './types'
-import { genNodeMetaData } from '@/app/components/workflow/utils'
 import { BlockEnum } from '@/app/components/workflow/types'
+import { genNodeMetaData } from '@/app/components/workflow/utils'
 
 const metaData = genNodeMetaData({
   sort: 2.1,
@@ -14,11 +15,11 @@ const nodeDefault: NodeDefault<AnswerNodeType> = {
     variables: [],
     answer: '',
   },
-  checkValid(payload: AnswerNodeType, t: any) {
+  checkValid(payload: AnswerNodeType, t: TFunction<'workflow'>) {
     let errorMessages = ''
     const { answer } = payload
     if (!answer)
-      errorMessages = t('workflow.errorMsg.fieldRequired', { field: t('workflow.nodes.answer.answer') })
+      errorMessages = t($ => $['errorMsg.fieldRequired'], { ns: 'workflow', field: t($ => $['nodes.answer.answer'], { ns: 'workflow' }) })
 
     return {
       isValid: !errorMessages,

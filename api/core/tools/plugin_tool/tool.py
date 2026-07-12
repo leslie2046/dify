@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 from collections.abc import Generator
-from typing import Any
+from typing import Any, override
+
+from sqlalchemy.orm import Session
 
 from core.plugin.impl.tool import PluginToolManager
 from core.plugin.utils.converter import convert_parameters_to_plugin_format
@@ -18,11 +22,14 @@ class PluginTool(Tool):
         self.plugin_unique_identifier = plugin_unique_identifier
         self.runtime_parameters: list[ToolParameter] | None = None
 
+    @override
     def tool_provider_type(self) -> ToolProviderType:
         return ToolProviderType.PLUGIN
 
+    @override
     def _invoke(
         self,
+        session: Session,
         user_id: str,
         tool_parameters: dict[str, Any],
         conversation_id: str | None = None,
@@ -46,7 +53,8 @@ class PluginTool(Tool):
             message_id=message_id,
         )
 
-    def fork_tool_runtime(self, runtime: ToolRuntime) -> "PluginTool":
+    @override
+    def fork_tool_runtime(self, runtime: ToolRuntime) -> PluginTool:
         return PluginTool(
             entity=self.entity,
             runtime=runtime,
@@ -55,6 +63,7 @@ class PluginTool(Tool):
             plugin_unique_identifier=self.plugin_unique_identifier,
         )
 
+    @override
     def get_runtime_parameters(
         self,
         conversation_id: str | None = None,

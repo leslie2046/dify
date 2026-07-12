@@ -1,12 +1,14 @@
-import { MARKETPLACE_URL_PREFIX, MAX_VAR_KEY_LENGTH, VAR_ITEM_TEMPLATE, VAR_ITEM_TEMPLATE_IN_WORKFLOW, getMaxVarNameLength } from '@/config'
+import type { InputVar } from '@/app/components/workflow/types'
+import type { I18nKeysByPrefix } from '@/types/i18n'
 import {
   CONTEXT_PLACEHOLDER_TEXT,
   HISTORY_PLACEHOLDER_TEXT,
   PRE_PROMPT_PLACEHOLDER_TEXT,
   QUERY_PLACEHOLDER_TEXT,
 } from '@/app/components/base/prompt-editor/constants'
-import type { InputVar } from '@/app/components/workflow/types'
 import { InputVarType } from '@/app/components/workflow/types'
+import { getMaxVarNameLength, MARKETPLACE_URL_PREFIX, MAX_VAR_KEY_LENGTH, VAR_ITEM_TEMPLATE, VAR_ITEM_TEMPLATE_IN_WORKFLOW } from '@/config'
+import { env } from '@/env'
 
 const otherAllowedRegex = /^\w+$/
 
@@ -29,7 +31,7 @@ export const getNewVar = (key: string, type: string) => {
 }
 
 export const getNewVarInWorkflow = (key: string, type = InputVarType.textInput): InputVar => {
-  const { max_length: _maxLength, ...rest } = VAR_ITEM_TEMPLATE_IN_WORKFLOW
+  const { ...rest } = VAR_ITEM_TEMPLATE_IN_WORKFLOW
   if (type !== InputVarType.textInput) {
     return {
       ...rest,
@@ -49,7 +51,9 @@ export const getNewVarInWorkflow = (key: string, type = InputVarType.textInput):
   }
 }
 
-export const checkKey = (key: string, canBeEmpty?: boolean, _keys?: string[]) => {
+type VarKeyErrorMessageKey = I18nKeysByPrefix<'appDebug', 'varKeyError.'>
+
+export const checkKey = (key: string, canBeEmpty?: boolean, _keys?: string[]): true | VarKeyErrorMessageKey => {
   if (key.length === 0 && !canBeEmpty)
     return 'canNoBeEmpty'
 
@@ -60,7 +64,7 @@ export const checkKey = (key: string, canBeEmpty?: boolean, _keys?: string[]) =>
     return 'tooLong'
 
   if (otherAllowedRegex.test(key)) {
-    if (/\d/.test(key[0]))
+    if (/\d/.test(key[0]!))
       return 'notStartWithNumber'
 
     return true
@@ -68,10 +72,14 @@ export const checkKey = (key: string, canBeEmpty?: boolean, _keys?: string[]) =>
   return 'notValid'
 }
 
-export const checkKeys = (keys: string[], canBeEmpty?: boolean) => {
+type CheckKeysResult
+  = | { isValid: true, errorKey: '', errorMessageKey: '' }
+    | { isValid: false, errorKey: string, errorMessageKey: VarKeyErrorMessageKey }
+
+export const checkKeys = (keys: string[], canBeEmpty?: boolean): CheckKeysResult => {
   let isValid = true
   let errorKey = ''
-  let errorMessageKey = ''
+  let errorMessageKey: VarKeyErrorMessageKey | '' = ''
   keys.forEach((key) => {
     if (!isValid)
       return
@@ -83,7 +91,7 @@ export const checkKeys = (keys: string[], canBeEmpty?: boolean) => {
       errorMessageKey = res
     }
   })
-  return { isValid, errorKey, errorMessageKey }
+  return { isValid, errorKey, errorMessageKey } as CheckKeysResult
 }
 
 export const hasDuplicateStr = (strArr: string[]) => {
@@ -94,10 +102,10 @@ export const hasDuplicateStr = (strArr: string[]) => {
     else
       strObj[str] = 1
   })
-  return !!Object.keys(strObj).find(key => strObj[key] > 1)
+  return !!Object.keys(strObj).find(key => strObj[key]! > 1)
 }
 
-const varRegex = /\{\{([a-zA-Z_]\w*)\}\}/g
+const varRegex = /\{\{([a-z_]\w*)\}\}/gi
 export const getVars = (value: string) => {
   if (!value)
     return []
@@ -122,10 +130,32 @@ export const getVars = (value: string) => {
 
 // Set the value of basePath
 // example: /dify
-export const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
+export const basePath = env.NEXT_PUBLIC_BASE_PATH
 
-export function getMarketplaceUrl(path: string, params?: Record<string, string | undefined>) {
-  const searchParams = new URLSearchParams({ source: encodeURIComponent(window.location.origin) })
+type MarketplaceUrlOptions = {
+  source?: string
+}
+
+const getUrlOrigin = (url?: string) => {
+  if (!url)
+    return undefined
+
+  try {
+    return new URL(url).origin
+  }
+  catch {
+    return undefined
+  }
+}
+
+const marketplaceSource = getUrlOrigin(env.NEXT_PUBLIC_WEB_PREFIX)
+
+export function getMarketplaceUrl(path: string, params?: Record<string, string | undefined>, options?: MarketplaceUrlOptions) {
+  const searchParams = new URLSearchParams()
+  const source = getUrlOrigin(options?.source) ?? marketplaceSource
+  if (source)
+    searchParams.set('source', source)
+
   if (params) {
     Object.keys(params).forEach((key) => {
       const value = params[key]
@@ -133,7 +163,9 @@ export function getMarketplaceUrl(path: string, params?: Record<string, string |
         searchParams.append(key, value)
     })
   }
-  return `${MARKETPLACE_URL_PREFIX}${path}?${searchParams.toString()}`
+
+  const queryString = searchParams.toString()
+  return queryString ? `${MARKETPLACE_URL_PREFIX}${path}?${queryString}` : `${MARKETPLACE_URL_PREFIX}${path}`
 }
 
 export const replaceSpaceWithUnderscoreInVarNameInput = (input: HTMLInputElement) => {

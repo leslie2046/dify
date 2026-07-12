@@ -1,23 +1,25 @@
 import threading
-from typing import Any
+from typing import override
 
 from flask import Flask, current_app
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from core.callback_handler.index_tool_callback_handler import DatasetIndexToolCallbackHandler
 from core.model_manager import ModelManager
-from core.model_runtime.entities.model_entities import ModelType
-from core.rag.datasource.retrieval_service import RetrievalService
-from core.rag.entities.citation_metadata import RetrievalSourceMetadata
+from core.rag.datasource.retrieval_service import DefaultRetrievalModelDict, RetrievalService
+from core.rag.entities import RetrievalSourceMetadata
+from core.rag.index_processor.constant.index_type import IndexTechniqueType
 from core.rag.models.document import Document as RagDocument
 from core.rag.rerank.rerank_model import RerankModelRunner
 from core.rag.retrieval.retrieval_methods import RetrievalMethod
 from core.tools.utils.dataset_retriever.dataset_retriever_base_tool import DatasetRetrieverBaseTool
 from extensions.ext_database import db
+from graphon.model_runtime.entities.model_entities import ModelType
 from models.dataset import Dataset, Document, DocumentSegment
 
-default_retrieval_model: dict[str, Any] = {
+default_retrieval_model: DefaultRetrievalModelDict = {
     "search_method": RetrievalMethod.SEMANTIC_SEARCH,
     "reranking_enable": False,
     "reranking_model": {"reranking_provider_name": "", "reranking_model_name": ""},
@@ -46,7 +48,8 @@ class DatasetMultiRetrieverTool(DatasetRetrieverBaseTool):
             name=f"dataset_{tenant_id.replace('-', '_')}", tenant_id=tenant_id, dataset_ids=dataset_ids, **kwargs
         )
 
-    def _run(self, query: str) -> str:
+    @override
+    def _run(self, session: Session, query: str) -> str:
         threads = []
         all_documents: list[RagDocument] = []
         for dataset_id in self.dataset_ids:
@@ -65,7 +68,7 @@ class DatasetMultiRetrieverTool(DatasetRetrieverBaseTool):
         for thread in threads:
             thread.join()
         # do rerank for searched documents
-        model_manager = ModelManager()
+        model_manager = ModelManager.for_tenant(tenant_id=self.tenant_id)
         rerank_model_instance = model_manager.get_model_instance(
             tenant_id=self.tenant_id,
             provider=self.reranking_provider_name,
@@ -77,7 +80,7 @@ class DatasetMultiRetrieverTool(DatasetRetrieverBaseTool):
         all_documents = rerank_runner.run(query, all_documents, self.score_threshold, self.top_k)
 
         for hit_callback in self.hit_callbacks:
-            hit_callback.on_tool_end(all_documents)
+            hit_callback.on_tool_end(all_documents, db.session())
 
         document_score_list = {}
         for item in all_documents:
@@ -109,7 +112,7 @@ class DatasetMultiRetrieverTool(DatasetRetrieverBaseTool):
                 context_list: list[RetrievalSourceMetadata] = []
                 resource_number = 1
                 for segment in sorted_segments:
-                    dataset = db.session.query(Dataset).filter_by(id=segment.dataset_id).first()
+                    dataset = db.session.get(Dataset, segment.dataset_id)
                     document_stmt = select(Document).where(
                         Document.id == segment.document_id,
                         Document.enabled == True,
@@ -145,7 +148,7 @@ class DatasetMultiRetrieverTool(DatasetRetrieverBaseTool):
                 for hit_callback in self.hit_callbacks:
                     hit_callback.return_retriever_resource_info(context_list)
 
-            return str("\n".join(document_context_list))
+            return "\n".join(document_context_list)
         return ""
 
     def _retriever(
@@ -164,12 +167,12 @@ class DatasetMultiRetrieverTool(DatasetRetrieverBaseTool):
                 return []
 
             for hit_callback in hit_callbacks:
-                hit_callback.on_query(query, dataset.id)
+                hit_callback.on_query(query, dataset.id, db.session())
 
             # get retrieval model , if the model is not setting , using default
             retrieval_model = dataset.retrieval_model or default_retrieval_model
 
-            if dataset.indexing_technique == "economy":
+            if dataset.indexing_technique == IndexTechniqueType.ECONOMY:
                 # use keyword table query
                 documents = RetrievalService.retrieve(
                     retrieval_method=RetrievalMethod.KEYWORD_SEARCH,

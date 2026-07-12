@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from datetime import datetime
 from decimal import Decimal
@@ -6,17 +8,23 @@ from uuid import uuid4
 
 import sqlalchemy as sa
 from deprecated import deprecated
-from sqlalchemy import ForeignKey, String, func
+from sqlalchemy import ForeignKey, String, func, select
 from sqlalchemy.orm import Mapped, mapped_column
 
+from core.plugin.entities.plugin_daemon import CredentialType
 from core.tools.entities.common_entities import I18nObject
 from core.tools.entities.tool_bundle import ApiToolBundle
-from core.tools.entities.tool_entities import ApiProviderSchemaType, WorkflowToolParameterConfiguration
+from core.tools.entities.tool_entities import (
+    ApiProviderSchemaType,
+    ToolProviderType,
+    WorkflowToolParameterConfiguration,
+)
 
 from .base import TypeBase
 from .engine import db
+from .enums import PermissionEnum
 from .model import Account, App, Tenant
-from .types import LongText, StringUUID
+from .types import EnumText, LongText, StringUUID
 
 if TYPE_CHECKING:
     from core.entities.mcp_provider import MCPProviderEntity
@@ -30,7 +38,9 @@ class ToolOAuthSystemClient(TypeBase):
         sa.UniqueConstraint("plugin_id", "provider", name="tool_oauth_system_client_plugin_id_provider_idx"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     plugin_id: Mapped[str] = mapped_column(String(512), nullable=False)
     provider: Mapped[str] = mapped_column(String(255), nullable=False)
     # oauth params of the tool provider
@@ -45,7 +55,9 @@ class ToolOAuthTenantClient(TypeBase):
         sa.UniqueConstraint("tenant_id", "plugin_id", "provider", name="unique_tool_oauth_tenant_client"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # tenant id
     tenant_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     plugin_id: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -71,7 +83,9 @@ class BuiltinToolProvider(TypeBase):
     )
 
     # id of the tool provider
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     name: Mapped[str] = mapped_column(
         String(256),
         nullable=False,
@@ -97,10 +111,19 @@ class BuiltinToolProvider(TypeBase):
     )
     is_default: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.text("false"), default=False)
     # credential type, e.g., "api-key", "oauth2"
-    credential_type: Mapped[str] = mapped_column(
-        String(32), nullable=False, server_default=sa.text("'api-key'"), default="api-key"
+    credential_type: Mapped[CredentialType] = mapped_column(
+        EnumText(CredentialType, length=32),
+        nullable=False,
+        server_default=sa.text("'api-key'"),
+        default=CredentialType.API_KEY,
     )
     expires_at: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, server_default=sa.text("-1"), default=-1)
+    visibility: Mapped[PermissionEnum] = mapped_column(
+        EnumText(PermissionEnum, length=40),
+        nullable=False,
+        server_default=sa.text("'all_team_members'"),
+        default=PermissionEnum.ALL_TEAM,
+    )
 
     @property
     def credentials(self) -> dict[str, Any]:
@@ -120,7 +143,9 @@ class ApiToolProvider(TypeBase):
         sa.UniqueConstraint("name", "tenant_id", name="unique_api_tool_provider"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # name of the api provider
     name: Mapped[str] = mapped_column(
         String(255),
@@ -131,7 +156,9 @@ class ApiToolProvider(TypeBase):
     icon: Mapped[str] = mapped_column(String(255), nullable=False)
     # original schema
     schema: Mapped[str] = mapped_column(LongText, nullable=False)
-    schema_type_str: Mapped[str] = mapped_column(String(40), nullable=False)
+    schema_type_str: Mapped[ApiProviderSchemaType] = mapped_column(
+        EnumText(ApiProviderSchemaType, length=40), nullable=False
+    )
     # who created this tool
     user_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     # tenant id
@@ -159,11 +186,11 @@ class ApiToolProvider(TypeBase):
     )
 
     @property
-    def schema_type(self) -> "ApiProviderSchemaType":
+    def schema_type(self) -> ApiProviderSchemaType:
         return ApiProviderSchemaType.value_of(self.schema_type_str)
 
     @property
-    def tools(self) -> list["ApiToolBundle"]:
+    def tools(self) -> list[ApiToolBundle]:
         return [ApiToolBundle.model_validate(tool) for tool in json.loads(self.tools_str)]
 
     @property
@@ -174,11 +201,11 @@ class ApiToolProvider(TypeBase):
     def user(self) -> Account | None:
         if not self.user_id:
             return None
-        return db.session.query(Account).where(Account.id == self.user_id).first()
+        return db.session.scalar(select(Account).where(Account.id == self.user_id))
 
     @property
     def tenant(self) -> Tenant | None:
-        return db.session.query(Tenant).where(Tenant.id == self.tenant_id).first()
+        return db.session.scalar(select(Tenant).where(Tenant.id == self.tenant_id))
 
 
 class ToolLabelBinding(TypeBase):
@@ -192,11 +219,13 @@ class ToolLabelBinding(TypeBase):
         sa.UniqueConstraint("tool_id", "label_name", name="unique_tool_label_bind"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # tool id
     tool_id: Mapped[str] = mapped_column(String(64), nullable=False)
     # tool type
-    tool_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    tool_type: Mapped[ToolProviderType] = mapped_column(EnumText(ToolProviderType, length=40), nullable=False)
     # label name
     label_name: Mapped[str] = mapped_column(String(40), nullable=False)
 
@@ -213,7 +242,9 @@ class WorkflowToolProvider(TypeBase):
         sa.UniqueConstraint("tenant_id", "app_id", name="unique_workflow_tool_provider_app_id"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # name of the workflow provider
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # label of the workflow provider
@@ -248,14 +279,14 @@ class WorkflowToolProvider(TypeBase):
 
     @property
     def user(self) -> Account | None:
-        return db.session.query(Account).where(Account.id == self.user_id).first()
+        return db.session.scalar(select(Account).where(Account.id == self.user_id))
 
     @property
     def tenant(self) -> Tenant | None:
-        return db.session.query(Tenant).where(Tenant.id == self.tenant_id).first()
+        return db.session.scalar(select(Tenant).where(Tenant.id == self.tenant_id))
 
     @property
-    def parameter_configurations(self) -> list["WorkflowToolParameterConfiguration"]:
+    def parameter_configurations(self) -> list[WorkflowToolParameterConfiguration]:
         return [
             WorkflowToolParameterConfiguration.model_validate(config)
             for config in json.loads(self.parameter_configuration)
@@ -263,7 +294,7 @@ class WorkflowToolProvider(TypeBase):
 
     @property
     def app(self) -> App | None:
-        return db.session.query(App).where(App.id == self.app_id).first()
+        return db.session.scalar(select(App).where(App.id == self.app_id))
 
 
 class MCPToolProvider(TypeBase):
@@ -279,7 +310,9 @@ class MCPToolProvider(TypeBase):
         sa.UniqueConstraint("tenant_id", "server_identifier", name="unique_mcp_provider_server_identifier"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # name of the mcp provider
     name: Mapped[str] = mapped_column(String(40), nullable=False)
     # server identifier of the mcp provider
@@ -317,8 +350,16 @@ class MCPToolProvider(TypeBase):
     # encrypted headers for MCP server requests
     encrypted_headers: Mapped[str | None] = mapped_column(LongText, nullable=True, default=None)
 
+    # M2 (MCP user-identity forwarding) — which identity-forwarding mechanism
+    # this provider uses. Reserved values:
+    #   "off"       — no forwarding (default; preserves pre-M2 behaviour).
+    #   "idp_token" — forward an SSO access token minted by dify-enterprise.
+    identity_mode: Mapped[str] = mapped_column(
+        sa.String(32), nullable=False, server_default=sa.text("'off'"), default="off"
+    )
+
     def load_user(self) -> Account | None:
-        return db.session.query(Account).where(Account.id == self.user_id).first()
+        return db.session.scalar(select(Account).where(Account.id == self.user_id))
 
     @property
     def credentials(self) -> dict[str, Any]:
@@ -330,7 +371,7 @@ class MCPToolProvider(TypeBase):
             return {}
 
     @property
-    def headers(self) -> dict[str, Any]:
+    def headers(self) -> dict[str, str]:
         if self.encrypted_headers is None:
             return {}
         try:
@@ -345,7 +386,7 @@ class MCPToolProvider(TypeBase):
         except (json.JSONDecodeError, TypeError):
             return []
 
-    def to_entity(self) -> "MCPProviderEntity":
+    def to_entity(self) -> MCPProviderEntity:
         """Convert to domain entity"""
         from core.entities.mcp_provider import MCPProviderEntity
 
@@ -360,7 +401,9 @@ class ToolModelInvoke(TypeBase):
     __tablename__ = "tool_model_invokes"
     __table_args__ = (sa.PrimaryKeyConstraint("id", name="tool_model_invoke_pkey"),)
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # who invoke this tool
     user_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     # tenant id
@@ -368,7 +411,7 @@ class ToolModelInvoke(TypeBase):
     # provider
     provider: Mapped[str] = mapped_column(String(255), nullable=False)
     # type
-    tool_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    tool_type: Mapped[ToolProviderType] = mapped_column(EnumText(ToolProviderType, length=40), nullable=False)
     # tool name
     tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
     # invoke parameters
@@ -413,7 +456,9 @@ class ToolConversationVariables(TypeBase):
         sa.Index("conversation_id_idx", "conversation_id"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # conversation user id
     user_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     # tenant id
@@ -450,7 +495,9 @@ class ToolFile(TypeBase):
         sa.Index("tool_file_conversation_id_idx", "conversation_id"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # conversation user id
     user_id: Mapped[str] = mapped_column(StringUUID)
     # tenant id
@@ -481,7 +528,9 @@ class DeprecatedPublishedAppTool(TypeBase):
         sa.UniqueConstraint("app_id", "user_id", name="unique_published_app_tool"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     # id of the app
     app_id: Mapped[str] = mapped_column(StringUUID, ForeignKey("apps.id"), nullable=False)
 
@@ -511,5 +560,5 @@ class DeprecatedPublishedAppTool(TypeBase):
     )
 
     @property
-    def description_i18n(self) -> "I18nObject":
+    def description_i18n(self) -> I18nObject:
         return I18nObject.model_validate(json.loads(self.description))

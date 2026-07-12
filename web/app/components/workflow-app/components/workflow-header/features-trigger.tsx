@@ -1,57 +1,64 @@
+import type { AppPublisherPublishParams } from '@/app/components/app/app-publisher'
+import type { EndNodeType } from '@/app/components/workflow/nodes/end/types'
+import type { StartNodeType } from '@/app/components/workflow/nodes/start/types'
+import type {
+  CommonEdgeType,
+  Node,
+} from '@/app/components/workflow/types'
+import { Button } from '@langgenius/dify-ui/button'
+import { cn } from '@langgenius/dify-ui/cn'
+import { toast } from '@langgenius/dify-ui/toast'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   memo,
   useCallback,
   useMemo,
 } from 'react'
-import { useEdges } from 'reactflow'
-import { RiApps2AddLine } from '@remixicon/react'
 import { useTranslation } from 'react-i18next'
-import {
-  useStore,
-  useWorkflowStore,
-} from '@/app/components/workflow/store'
+import { useEdges } from 'reactflow'
+import { AppPublisher } from '@/app/components/app/app-publisher'
+import { useStore as useAppStore } from '@/app/components/app/store'
+import { useFeatures } from '@/app/components/base/features/hooks'
+import { Plan } from '@/app/components/billing/type'
 import {
   useChecklist,
   useChecklistBeforePublish,
+  useIsChatMode,
   useNodesReadOnly,
   useNodesSyncDraft,
   // useWorkflowRunValidation,
 } from '@/app/components/workflow/hooks'
-import Button from '@/app/components/base/button'
-import AppPublisher from '@/app/components/app/app-publisher'
-import { useFeatures } from '@/app/components/base/features/hooks'
-import type {
-  CommonEdgeType,
-  Node,
-} from '@/app/components/workflow/types'
+import { useHooksStore } from '@/app/components/workflow/hooks-store'
+import { isAgentV2NodeData } from '@/app/components/workflow/nodes/agent-v2/types'
+import {
+  useStore,
+  useWorkflowStore,
+} from '@/app/components/workflow/store'
+import useNodes from '@/app/components/workflow/store/workflow/use-nodes'
 import {
   BlockEnum,
   InputVarType,
   isTriggerNode,
 } from '@/app/components/workflow/types'
-import { useToastContext } from '@/app/components/base/toast'
-import { useInvalidateAppWorkflow, usePublishWorkflow, useResetWorkflowVersionHistory } from '@/service/use-workflow'
-import { useInvalidateAppTriggers } from '@/service/use-tools'
-import type { PublishWorkflowParams } from '@/types/workflow'
-import { fetchAppDetail } from '@/service/apps'
-import { useStore as useAppStore } from '@/app/components/app/store'
-import useTheme from '@/hooks/use-theme'
-import cn from '@/utils/classnames'
-import { useIsChatMode } from '@/app/components/workflow/hooks'
-import type { StartNodeType } from '@/app/components/workflow/nodes/start/types'
 import { useProviderContext } from '@/context/provider-context'
-import { Plan } from '@/app/components/billing/type'
-import useNodes from '@/app/components/workflow/store/workflow/use-nodes'
+import useTheme from '@/hooks/use-theme'
+import { fetchAppDetail } from '@/service/apps'
+import { consoleQuery } from '@/service/client'
+import { appDetailQueryKeyPrefix } from '@/service/use-apps'
+import { useInvalidateAppTriggers } from '@/service/use-tools'
+import { useInvalidateAppWorkflow, usePublishWorkflow, useResetWorkflowVersionHistory } from '@/service/use-workflow'
 
 const FeaturesTrigger = () => {
   const { t } = useTranslation()
   const { theme } = useTheme()
   const isChatMode = useIsChatMode()
   const workflowStore = useWorkflowStore()
+  const queryClient = useQueryClient()
   const appDetail = useAppStore(s => s.appDetail)
-  const appID = appDetail?.id
   const setAppDetail = useAppStore(s => s.setAppDetail)
+  const appID = appDetail?.id
   const { nodesReadOnly, getNodesReadOnly } = useNodesReadOnly()
+  const canReleaseAndVersion = useHooksStore(s => s.accessControl.canReleaseAndVersion)
   const { plan, isFetchedPlan } = useProviderContext()
   const publishedAt = useStore(s => s.publishedAt)
   const draftUpdatedAt = useStore(s => s.draftUpdatedAt)
@@ -59,8 +66,23 @@ const FeaturesTrigger = () => {
   const lastPublishedHasUserInput = useStore(s => s.lastPublishedHasUserInput)
 
   const nodes = useNodes()
+  const rosterAgentIds = useMemo(() => {
+    return Array.from(new Set(nodes.flatMap((node) => {
+      const binding = isAgentV2NodeData(node.data) ? node.data.agent_binding : undefined
+      if (
+        binding?.binding_type !== 'roster_agent'
+        || typeof binding.agent_id !== 'string'
+        || binding.agent_id.length === 0
+      ) {
+        return []
+      }
+
+      return [binding.agent_id]
+    })))
+  }, [nodes])
   const hasWorkflowNodes = nodes.length > 0
   const startNode = nodes.find(node => node.data.type === BlockEnum.Start)
+  const endNode = nodes.find(node => node.data.type === BlockEnum.End)
   const startVariables = (startNode as Node<StartNodeType>)?.data?.variables
   const edges = useEdges<CommonEdgeType>()
 
@@ -81,10 +103,10 @@ const FeaturesTrigger = () => {
 
     return data
   }, [fileSettings?.image?.enabled, startVariables])
+  const endVariables = useMemo(() => (endNode as Node<EndNodeType>)?.data?.outputs || [], [endNode])
 
   const { handleCheckBeforePublish } = useChecklistBeforePublish()
   const { handleSyncWorkflowDraft } = useNodesSyncDraft()
-  const { notify } = useToastContext()
   const startNodeIds = useMemo(
     () => nodes.filter(node => node.data.type === BlockEnum.Start).map(node => node.id),
     [nodes],
@@ -108,6 +130,10 @@ const FeaturesTrigger = () => {
     return isFetchedPlan && plan.type === Plan.sandbox && entryCount > 2
   }, [nodes, plan.type, isFetchedPlan])
 
+  const hasHumanInputNode = useMemo(() => {
+    return nodes.some(node => node.data.type === BlockEnum.HumanInput)
+  }, [nodes])
+
   const resetWorkflowVersionHistory = useResetWorkflowVersionHistory()
   const invalidateAppTriggers = useInvalidateAppTriggers()
 
@@ -124,42 +150,60 @@ const FeaturesTrigger = () => {
 
   const updateAppDetail = useCallback(async () => {
     try {
-      const res = await fetchAppDetail({ url: '/apps', id: appID! })
+      if (!appID)
+        return
+
+      const res = await fetchAppDetail({ url: '/apps', id: appID })
+      queryClient.setQueryData([...appDetailQueryKeyPrefix, appID], res)
       setAppDetail({ ...res })
     }
     catch (error) {
       console.error(error)
     }
-  }, [appID, setAppDetail])
+  }, [appID, queryClient, setAppDetail])
 
   const { mutateAsync: publishWorkflow } = usePublishWorkflow()
   // const { validateBeforeRun } = useWorkflowRunValidation()
   const needWarningNodes = useChecklist(nodes, edges)
 
   const updatePublishedWorkflow = useInvalidateAppWorkflow()
-  const onPublish = useCallback(async (params?: PublishWorkflowParams) => {
+  const onPublish = useCallback(async (params?: AppPublisherPublishParams) => {
+    const publishParams = params && 'title' in params ? params : undefined
     // First check if there are any items in the checklist
     // if (!validateBeforeRun())
     //   throw new Error('Checklist has unresolved items')
 
     if (needWarningNodes.length > 0) {
-      notify({ type: 'error', message: t('workflow.panel.checklistTip') })
+      toast.error(t($ => $['panel.checklistTip'], { ns: 'workflow' }))
       throw new Error('Checklist has unresolved items')
     }
 
     // Then perform the detailed validation
     if (await handleCheckBeforePublish()) {
       const res = await publishWorkflow({
-        url: `/apps/${appID}/workflows/publish`,
-        title: params?.title || '',
-        releaseNotes: params?.releaseNotes || '',
+        url: publishParams?.url || `/apps/${appID}/workflows/publish`,
+        title: publishParams?.title || '',
+        releaseNotes: publishParams?.releaseNotes || '',
       })
-
       if (res) {
-        notify({ type: 'success', message: t('common.api.actionSuccess') })
+        toast.success(t($ => $['api.actionSuccess'], { ns: 'common' }))
         updatePublishedWorkflow(appID!)
         updateAppDetail()
         invalidateAppTriggers(appID!)
+        if (rosterAgentIds.length > 0) {
+          void queryClient.invalidateQueries({
+            queryKey: consoleQuery.agent.get.key(),
+          })
+          void Promise.all(rosterAgentIds.map(agentId => queryClient.invalidateQueries({
+            queryKey: consoleQuery.agent.byAgentId.referencingWorkflows.get.queryOptions({
+              input: {
+                params: {
+                  agent_id: agentId,
+                },
+              },
+            }).queryKey,
+          })))
+        }
         workflowStore.getState().setPublishedAt(res.created_at)
         workflowStore.getState().setLastPublishedHasUserInput(hasUserInputNode)
         resetWorkflowVersionHistory()
@@ -168,7 +212,7 @@ const FeaturesTrigger = () => {
     else {
       throw new Error('Checklist failed')
     }
-  }, [needWarningNodes, handleCheckBeforePublish, publishWorkflow, notify, appID, t, updatePublishedWorkflow, updateAppDetail, workflowStore, resetWorkflowVersionHistory, invalidateAppTriggers])
+  }, [needWarningNodes, handleCheckBeforePublish, publishWorkflow, appID, t, updatePublishedWorkflow, updateAppDetail, invalidateAppTriggers, rosterAgentIds, queryClient, workflowStore, hasUserInputNode, resetWorkflowVersionHistory])
 
   const onPublisherToggle = useCallback((state: boolean) => {
     if (state)
@@ -185,22 +229,23 @@ const FeaturesTrigger = () => {
       {isChatMode && (
         <Button
           className={cn(
-            'text-components-button-secondary-text',
-            theme === 'dark' && 'rounded-lg border border-black/5 bg-white/10 backdrop-blur-sm',
+            'rounded-lg border border-transparent text-components-button-secondary-text',
+            theme === 'dark' && 'border-black/5 bg-white/10 backdrop-blur-xs',
           )}
           onClick={handleShowFeatures}
         >
-          <RiApps2AddLine className='mr-1 h-4 w-4 text-components-button-secondary-text' />
-          {t('workflow.common.features')}
+          <span className="mr-1 i-ri-apps-2-add-line size-4 text-components-button-secondary-text" />
+          {t($ => $['common.features'], { ns: 'workflow' })}
         </Button>
       )}
       <AppPublisher
         {...{
           publishedAt,
           draftUpdatedAt,
-          disabled: nodesReadOnly || !hasWorkflowNodes,
+          disabled: nodesReadOnly || !hasWorkflowNodes || !canReleaseAndVersion,
           toolPublished,
           inputs: variables,
+          outputs: endVariables,
           onRefreshData: handleToolConfigureUpdate,
           onPublish,
           onToggle: onPublisherToggle,
@@ -209,7 +254,8 @@ const FeaturesTrigger = () => {
           missingStartNode: !startNode,
           hasTriggerNode,
           startNodeLimitExceeded,
-          publishDisabled: !hasWorkflowNodes || startNodeLimitExceeded,
+          publishDisabled: !hasWorkflowNodes || startNodeLimitExceeded || !canReleaseAndVersion,
+          hasHumanInputNode,
         }}
       />
     </>

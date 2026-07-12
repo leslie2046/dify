@@ -34,15 +34,20 @@ Example:
     ```
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, TypedDict
 
-from core.workflow.entities.pause_reason import PauseReason
-from core.workflow.repositories.workflow_execution_repository import WorkflowExecutionRepository
+from sqlalchemy.orm import Session
+
+from core.repositories.factory import WorkflowExecutionRepository
+from core.workflow.nodes.human_input.pause_reason import PauseReason as DifyPauseReason
+from graphon.entities.pause_reason import PauseReason as GraphonPauseReason
+from graphon.enums import WorkflowType
 from libs.infinite_scroll_pagination import InfiniteScrollPagination
 from models.enums import WorkflowRunTriggeredFrom
-from models.workflow import WorkflowRun
+from models.workflow import WorkflowAppLog, WorkflowArchiveLog, WorkflowPause, WorkflowPauseReason, WorkflowRun
 from repositories.entities.workflow_pause import WorkflowPauseEntity
 from repositories.types import (
     AverageInteractionStats,
@@ -50,6 +55,31 @@ from repositories.types import (
     DailyTerminalsStats,
     DailyTokenCostStats,
 )
+
+
+class RunsWithRelatedCountsDict(TypedDict):
+    runs: int
+    node_executions: int
+    offloads: int
+    app_logs: int
+    trigger_logs: int
+    pauses: int
+    pause_reasons: int
+
+
+@dataclass(frozen=True)
+class WorkflowRunCleanupRef:
+    """
+    Lightweight workflow run reference for retention cleanup scans.
+
+    Cleanup jobs use this DTO when they only need cursor, tenant eligibility, and run-id deletion data. Keeping the
+    query shape explicit prevents free-plan cleanup from hydrating full WorkflowRun models for rows that may be skipped
+    after billing checks.
+    """
+
+    id: str
+    tenant_id: str
+    created_at: datetime
 
 
 class APIWorkflowRunRepository(WorkflowExecutionRepository, Protocol):
@@ -253,12 +283,224 @@ class APIWorkflowRunRepository(WorkflowExecutionRepository, Protocol):
         """
         ...
 
+    def get_runs_batch_by_time_range(
+        self,
+        start_from: datetime | None,
+        end_before: datetime,
+        last_seen: tuple[datetime, str] | None,
+        batch_size: int,
+        run_types: Sequence[WorkflowType] | None = None,
+        tenant_ids: Sequence[str] | None = None,
+        tenant_prefixes: Sequence[str] | None = None,
+        workflow_ids: Sequence[str] | None = None,
+        run_shard_index: int | None = None,
+        run_shard_total: int | None = None,
+    ) -> Sequence[WorkflowRun]:
+        """
+        Fetch ended workflow runs in a time window for archival and clean batching.
+
+        Optional filters:
+        - run_types
+        - tenant_ids
+        - tenant_prefixes, using the first hexadecimal digit of tenant_id for rollout waves
+        - workflow_ids
+        - run_shard_index/run_shard_total, using a deterministic workflow_run_id shard
+        """
+        ...
+
+    def get_cleanup_refs_batch_by_time_range(
+        self,
+        start_from: datetime | None,
+        end_before: datetime,
+        last_seen: tuple[datetime, str] | None,
+        batch_size: int,
+        run_types: Sequence[WorkflowType] | None = None,
+        tenant_ids: Sequence[str] | None = None,
+        workflow_ids: Sequence[str] | None = None,
+        upper_bound: tuple[datetime, str] | None = None,
+    ) -> Sequence[WorkflowRunCleanupRef]:
+        """
+        Fetch lightweight ended workflow run refs in a time window for cleanup batching.
+
+        Args:
+            start_from: Optional inclusive lower time boundary.
+            end_before: Exclusive upper time boundary.
+            last_seen: Optional exclusive `(created_at, id)` cursor lower bound.
+            batch_size: Maximum number of refs to return.
+            run_types: Optional workflow type filter.
+            tenant_ids: Optional tenant filter.
+            workflow_ids: Optional workflow ID filter.
+            upper_bound: Optional inclusive `(created_at, id)` cursor upper bound. Cleanup uses this for a second,
+                tenant-filtered target query that must stay within the candidate page high-water cursor.
+
+        Returns:
+            Ordered lightweight cleanup refs containing only id, tenant_id, and created_at.
+        """
+        ...
+
+    def get_archived_run_ids(
+        self,
+        session: Session,
+        run_ids: Sequence[str],
+    ) -> set[str]:
+        """
+        Fetch workflow run IDs that already have archive log records.
+        """
+        ...
+
+    def get_archived_logs_by_time_range(
+        self,
+        session: Session,
+        tenant_ids: Sequence[str] | None,
+        start_date: datetime,
+        end_date: datetime,
+        limit: int,
+    ) -> Sequence[WorkflowArchiveLog]:
+        """
+        Fetch archived workflow logs by time range for restore.
+        """
+        ...
+
+    def get_archived_log_by_run_id(
+        self,
+        run_id: str,
+    ) -> WorkflowArchiveLog | None:
+        """
+        Fetch a workflow archive log by workflow run ID.
+        """
+        ...
+
+    def delete_archive_log_by_run_id(
+        self,
+        session: Session,
+        run_id: str,
+    ) -> int:
+        """
+        Delete archive log by workflow run ID.
+
+        Used after restoring a workflow run to remove the archive log record,
+        allowing the run to be archived again if needed.
+
+        Args:
+            session: Database session
+            run_id: Workflow run ID
+
+        Returns:
+            Number of records deleted (0 or 1)
+        """
+        ...
+
+    def delete_runs_with_related(
+        self,
+        runs: Sequence[WorkflowRun],
+        delete_node_executions: Callable[[Session, Sequence[WorkflowRun]], tuple[int, int]] | None = None,
+        delete_trigger_logs: Callable[[Session, Sequence[str]], int] | None = None,
+    ) -> RunsWithRelatedCountsDict:
+        """
+        Delete workflow runs and their related records (node executions, offloads, app logs,
+        trigger logs, pauses, pause reasons).
+        """
+        ...
+
+    def get_pause_records_by_run_id(
+        self,
+        session: Session,
+        run_id: str,
+    ) -> Sequence[WorkflowPause]:
+        """
+        Fetch workflow pause records by workflow run ID.
+        """
+        ...
+
+    def get_pause_reason_records_by_run_id(
+        self,
+        session: Session,
+        pause_ids: Sequence[str],
+    ) -> Sequence[WorkflowPauseReason]:
+        """
+        Fetch workflow pause reason records by pause IDs.
+        """
+        ...
+
+    def delete_runs_with_related_by_ids(
+        self,
+        run_ids: Sequence[str],
+        delete_node_executions: Callable[[Session, Sequence[str]], tuple[int, int]] | None = None,
+        delete_trigger_logs: Callable[[Session, Sequence[str]], int] | None = None,
+    ) -> RunsWithRelatedCountsDict:
+        """
+        Delete workflow runs and cleanup-owned related records by workflow run IDs.
+
+        This mirrors delete_runs_with_related() for cleanup callers that do not need full WorkflowRun models.
+        """
+        ...
+
+    def get_app_logs_by_run_id(
+        self,
+        session: Session,
+        run_id: str,
+    ) -> Sequence[WorkflowAppLog]:
+        """
+        Fetch workflow app logs by workflow run ID.
+        """
+        ...
+
+    def create_archive_logs(
+        self,
+        session: Session,
+        run: WorkflowRun,
+        app_logs: Sequence[WorkflowAppLog],
+        trigger_metadata: str | None,
+    ) -> int:
+        """
+        Create archive log records for a workflow run.
+        """
+        ...
+
+    def get_archived_runs_by_time_range(
+        self,
+        session: Session,
+        tenant_ids: Sequence[str] | None,
+        start_date: datetime,
+        end_date: datetime,
+        limit: int,
+    ) -> Sequence[WorkflowRun]:
+        """
+        Return workflow runs that already have archive logs, for cleanup of `workflow_runs`.
+        """
+        ...
+
+    def count_runs_with_related(
+        self,
+        runs: Sequence[WorkflowRun],
+        count_node_executions: Callable[[Session, Sequence[WorkflowRun]], tuple[int, int]] | None = None,
+        count_trigger_logs: Callable[[Session, Sequence[str]], int] | None = None,
+    ) -> RunsWithRelatedCountsDict:
+        """
+        Count workflow runs and their related records (node executions, offloads, app logs,
+        trigger logs, pauses, pause reasons) without deleting data.
+        """
+        ...
+
+    def count_runs_with_related_by_ids(
+        self,
+        run_ids: Sequence[str],
+        count_node_executions: Callable[[Session, Sequence[str]], tuple[int, int]] | None = None,
+        count_trigger_logs: Callable[[Session, Sequence[str]], int] | None = None,
+    ) -> RunsWithRelatedCountsDict:
+        """
+        Count workflow runs and cleanup-owned related records by workflow run IDs.
+
+        This mirrors count_runs_with_related() for dry-run cleanup callers that do not need full WorkflowRun models.
+        """
+        ...
+
     def create_workflow_pause(
         self,
         workflow_run_id: str,
         state_owner_user_id: str,
         state: str,
-        pause_reasons: Sequence[PauseReason],
+        pause_reasons: Sequence[GraphonPauseReason | DifyPauseReason],
     ) -> WorkflowPauseEntity:
         """
         Create a new workflow pause state.
@@ -282,6 +524,13 @@ class APIWorkflowRunRepository(WorkflowExecutionRepository, Protocol):
         # NOTE: we may get rid of the `state_owner_user_id` in parameter list.
         # However, removing it would require an extra for `Workflow` model
         # while creating pause.
+        ...
+
+    def get_workflow_pause(self, workflow_run_id: str) -> WorkflowPauseEntity | None:
+        """Retrieve the current pause for a workflow execution.
+
+        If there is no current pause, this method would return `None`.
+        """
         ...
 
     def resume_workflow_pause(
@@ -477,5 +726,21 @@ class APIWorkflowRunRepository(WorkflowExecutionRepository, Protocol):
         Returns:
             List of dictionaries containing date and average interactions:
             [{"date": "2024-01-01", "interactions": 2.5}, ...]
+        """
+        ...
+
+    def get_workflow_run_by_id_and_tenant_id(self, tenant_id: str, run_id: str) -> WorkflowRun | None:
+        """
+        Get a specific workflow run by its id and the associated tenant id.
+
+        This function does not apply application isolation. It should only be used when
+        the application identifier is not available.
+
+        Args:
+            tenant_id: Tenant identifier for multi-tenant isolation
+            run_id: Workflow run identifier
+
+        Returns:
+            WorkflowRun object if found, None otherwise
         """
         ...

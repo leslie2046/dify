@@ -1,13 +1,227 @@
-x-shared-env: &shared-api-worker-env
+# Shared configuration using YAML anchors and env_file
+x-shared-api-worker-config: &shared-api-worker-config
+  env_file:
+    - path: ./envs/core-services/shared.env
+      required: false
+    - path: ./envs/core-services/api.env
+      required: false
+    - path: ./envs/security.env
+      required: false
+    - path: ./envs/databases/db-postgres.env
+      required: false
+    - path: ./envs/databases/db-mysql.env
+      required: false
+    - path: ./envs/databases/redis.env
+      required: false
+    - path: ./envs/vectorstores/weaviate.env
+      required: false
+    - path: ./envs/vectorstores/qdrant.env
+      required: false
+    - path: ./envs/vectorstores/oceanbase.env
+      required: false
+    - path: ./envs/vectorstores/seekdb.env
+      required: false
+    - path: ./envs/vectorstores/couchbase.env
+      required: false
+    - path: ./envs/vectorstores/pgvector.env
+      required: false
+    - path: ./envs/vectorstores/vastbase.env
+      required: false
+    - path: ./envs/vectorstores/pgvecto-rs.env
+      required: false
+    - path: ./envs/vectorstores/chroma.env
+      required: false
+    - path: ./envs/vectorstores/iris.env
+      required: false
+    - path: ./envs/vectorstores/oracle.env
+      required: false
+    - path: ./envs/vectorstores/opengauss.env
+      required: false
+    - path: ./envs/vectorstores/myscale.env
+      required: false
+    - path: ./envs/vectorstores/matrixone.env
+      required: false
+    - path: ./envs/vectorstores/elasticsearch.env
+      required: false
+    - path: ./envs/vectorstores/opensearch.env
+      required: false
+    - path: ./envs/vectorstores/milvus.env
+      required: false
+    - path: ./envs/infrastructure/nginx.env
+      required: false
+    - path: ./envs/infrastructure/certbot.env
+      required: false
+    - path: ./envs/infrastructure/ssrf-proxy.env
+      required: false
+    - path: ./envs/infrastructure/etcd.env
+      required: false
+    - path: ./envs/infrastructure/minio.env
+      required: false
+    - path: ./envs/infrastructure/milvus-standalone.env
+      required: false
+    - ./.env
+  networks:
+    - ssrf_proxy_network
+    - default
+  restart: always
+
+x-shared-worker-config: &shared-worker-config
+  env_file:
+    - path: ./envs/core-services/shared.env
+      required: false
+    - path: ./envs/core-services/worker.env
+      required: false
+    - path: ./envs/security.env
+      required: false
+    - path: ./envs/databases/db-postgres.env
+      required: false
+    - path: ./envs/databases/db-mysql.env
+      required: false
+    - path: ./envs/databases/redis.env
+      required: false
+    - path: ./envs/vectorstores/weaviate.env
+      required: false
+    - path: ./envs/vectorstores/qdrant.env
+      required: false
+    - path: ./envs/vectorstores/oceanbase.env
+      required: false
+    - path: ./envs/vectorstores/seekdb.env
+      required: false
+    - path: ./envs/vectorstores/couchbase.env
+      required: false
+    - path: ./envs/vectorstores/pgvector.env
+      required: false
+    - path: ./envs/vectorstores/vastbase.env
+      required: false
+    - path: ./envs/vectorstores/pgvecto-rs.env
+      required: false
+    - path: ./envs/vectorstores/chroma.env
+      required: false
+    - path: ./envs/vectorstores/iris.env
+      required: false
+    - path: ./envs/vectorstores/oracle.env
+      required: false
+    - path: ./envs/vectorstores/opengauss.env
+      required: false
+    - path: ./envs/vectorstores/myscale.env
+      required: false
+    - path: ./envs/vectorstores/matrixone.env
+      required: false
+    - path: ./envs/vectorstores/elasticsearch.env
+      required: false
+    - path: ./envs/vectorstores/opensearch.env
+      required: false
+    - path: ./envs/vectorstores/milvus.env
+      required: false
+    - path: ./envs/infrastructure/nginx.env
+      required: false
+    - path: ./envs/infrastructure/certbot.env
+      required: false
+    - path: ./envs/infrastructure/ssrf-proxy.env
+      required: false
+    - path: ./envs/infrastructure/etcd.env
+      required: false
+    - path: ./envs/infrastructure/minio.env
+      required: false
+    - path: ./envs/infrastructure/milvus-standalone.env
+      required: false
+    - ./.env
+  networks:
+    - ssrf_proxy_network
+    - default
+  restart: always
+
+x-shared-worker-beat-config: &shared-worker-beat-config
+  env_file:
+    - path: ./envs/core-services/shared.env
+      required: false
+    - path: ./envs/core-services/worker-beat.env
+      required: false
+    - path: ./envs/security.env
+      required: false
+    - path: ./envs/databases/db-postgres.env
+      required: false
+    - path: ./envs/databases/db-mysql.env
+      required: false
+    - path: ./envs/databases/redis.env
+      required: false
+    - path: ./envs/vectorstores/weaviate.env
+      required: false
+    - path: ./envs/vectorstores/qdrant.env
+      required: false
+    - path: ./envs/vectorstores/oceanbase.env
+      required: false
+    - path: ./envs/vectorstores/seekdb.env
+      required: false
+    - path: ./envs/vectorstores/couchbase.env
+      required: false
+    - path: ./envs/vectorstores/pgvector.env
+      required: false
+    - path: ./envs/vectorstores/vastbase.env
+      required: false
+    - path: ./envs/vectorstores/pgvecto-rs.env
+      required: false
+    - path: ./envs/vectorstores/chroma.env
+      required: false
+    - path: ./envs/vectorstores/iris.env
+      required: false
+    - path: ./envs/vectorstores/oracle.env
+      required: false
+    - path: ./envs/vectorstores/opengauss.env
+      required: false
+    - path: ./envs/vectorstores/myscale.env
+      required: false
+    - path: ./envs/vectorstores/matrixone.env
+      required: false
+    - path: ./envs/vectorstores/elasticsearch.env
+      required: false
+    - path: ./envs/vectorstores/opensearch.env
+      required: false
+    - path: ./envs/vectorstores/milvus.env
+      required: false
+    - path: ./envs/infrastructure/nginx.env
+      required: false
+    - path: ./envs/infrastructure/certbot.env
+      required: false
+    - path: ./envs/infrastructure/ssrf-proxy.env
+      required: false
+    - path: ./envs/infrastructure/etcd.env
+      required: false
+    - path: ./envs/infrastructure/minio.env
+      required: false
+    - path: ./envs/infrastructure/milvus-standalone.env
+      required: false
+    - ./.env
+  networks:
+    - ssrf_proxy_network
+    - default
+  restart: always
+
 services:
+  # Init container to fix permissions
+  init_permissions:
+    image: busybox:latest
+    command:
+      - sh
+      - -c
+      - |
+        FLAG_FILE="/app/api/storage/.init_permissions"
+        if [ -f "$${FLAG_FILE}" ]; then
+          echo "Permissions already initialized. Exiting."
+          exit 0
+        fi
+        echo "Initializing permissions for /app/api/storage"
+        chown -R 1001:1001 /app/api/storage && touch "$${FLAG_FILE}"
+        echo "Permissions initialized. Exiting."
+    volumes:
+      - ./volumes/app/storage:/app/api/storage
+    restart: "no"
+
   # API service
   api:
-    image: langgenius/dify-api:1.10.1
-    restart: always
+    <<: *shared-api-worker-config
+    image: langgenius/dify-api:1.16.0-rc1
     environment:
-      # Use the shared environment variables.
-      <<: *shared-api-worker-env
-      # Startup mode, 'api' starts the API server.
       MODE: api
       SENTRY_DSN: ${API_SENTRY_DSN:-}
       SENTRY_TRACES_SAMPLE_RATE: ${API_SENTRY_TRACES_SAMPLE_RATE:-1.0}
@@ -15,8 +229,12 @@ services:
       PLUGIN_REMOTE_INSTALL_HOST: ${EXPOSE_PLUGIN_DEBUGGING_HOST:-localhost}
       PLUGIN_REMOTE_INSTALL_PORT: ${EXPOSE_PLUGIN_DEBUGGING_PORT:-5003}
       PLUGIN_MAX_PACKAGE_SIZE: ${PLUGIN_MAX_PACKAGE_SIZE:-52428800}
+      PLUGIN_DAEMON_TIMEOUT: ${PLUGIN_DAEMON_TIMEOUT:-600.0}
       INNER_API_KEY_FOR_PLUGIN: ${PLUGIN_DIFY_INNER_API_KEY:-QaHbTe77CtuXmsfyhR7+vRjI/+XbV1AaFy691iy+kGDv2Jvy0/eAh8Y1}
+      AGENT_BACKEND_BASE_URL: ${AGENT_BACKEND_BASE_URL:-http://agent_backend:5050}
     depends_on:
+      init_permissions:
+        condition: service_completed_successfully
       db_postgres:
         condition: service_healthy
         required: false
@@ -31,9 +249,42 @@ services:
         required: false
       redis:
         condition: service_started
+      agent_backend:
+        condition: service_started
     volumes:
       # Mount the storage directory to the container, for storing user files.
       - ./volumes/app/storage:/app/api/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ssrf_proxy_network
+      - default
+
+  # WebSocket service for workflow collaboration.
+  api_websocket:
+    <<: *shared-api-worker-config
+    image: langgenius/dify-api:1.16.0-rc1
+    profiles:
+      - collaboration
+    environment:
+      MODE: api
+      SERVER_WORKER_AMOUNT: ${API_WEBSOCKET_WORKER_AMOUNT:-1}
+      SERVER_WORKER_CLASS: ${API_WEBSOCKET_WORKER_CLASS:-geventwebsocket.gunicorn.workers.GeventWebSocketWorker}
+      SERVER_WORKER_CONNECTIONS: ${API_WEBSOCKET_WORKER_CONNECTIONS:-1000}
+      GUNICORN_TIMEOUT: ${API_WEBSOCKET_GUNICORN_TIMEOUT:-360}
+    depends_on:
+      db_postgres:
+        condition: service_healthy
+        required: false
+      db_mysql:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_started
     networks:
       - ssrf_proxy_network
       - default
@@ -41,19 +292,19 @@ services:
   # worker service
   # The Celery worker for processing all queues (dataset, workflow, mail, etc.)
   worker:
-    image: langgenius/dify-api:1.10.1
-    restart: always
+    <<: *shared-worker-config
+    image: langgenius/dify-api:1.16.0-rc1
     environment:
-      # Use the shared environment variables.
-      <<: *shared-api-worker-env
-      # Startup mode, 'worker' starts the Celery worker for processing all queues.
       MODE: worker
       SENTRY_DSN: ${API_SENTRY_DSN:-}
       SENTRY_TRACES_SAMPLE_RATE: ${API_SENTRY_TRACES_SAMPLE_RATE:-1.0}
       SENTRY_PROFILES_SAMPLE_RATE: ${API_SENTRY_PROFILES_SAMPLE_RATE:-1.0}
       PLUGIN_MAX_PACKAGE_SIZE: ${PLUGIN_MAX_PACKAGE_SIZE:-52428800}
       INNER_API_KEY_FOR_PLUGIN: ${PLUGIN_DIFY_INNER_API_KEY:-QaHbTe77CtuXmsfyhR7+vRjI/+XbV1AaFy691iy+kGDv2Jvy0/eAh8Y1}
+      AGENT_BACKEND_BASE_URL: ${AGENT_BACKEND_BASE_URL:-http://agent_backend:5050}
     depends_on:
+      init_permissions:
+        condition: service_completed_successfully
       db_postgres:
         condition: service_healthy
         required: false
@@ -68,9 +319,18 @@ services:
         required: false
       redis:
         condition: service_started
+      agent_backend:
+        condition: service_started
     volumes:
       # Mount the storage directory to the container, for storing user files.
       - ./volumes/app/storage:/app/api/storage
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A celery_healthcheck.celery inspect ping"]
+      interval: ${COMPOSE_WORKER_HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${COMPOSE_WORKER_HEALTHCHECK_TIMEOUT:-30s}
+      retries: 3
+      start_period: 60s
+      disable: ${COMPOSE_WORKER_HEALTHCHECK_DISABLED:-true}
     networks:
       - ssrf_proxy_network
       - default
@@ -78,14 +338,13 @@ services:
   # worker_beat service
   # Celery beat for scheduling periodic tasks.
   worker_beat:
-    image: langgenius/dify-api:1.10.1
-    restart: always
+    <<: *shared-worker-beat-config
+    image: langgenius/dify-api:1.16.0-rc1
     environment:
-      # Use the shared environment variables.
-      <<: *shared-api-worker-env
-      # Startup mode, 'worker_beat' starts the Celery beat for scheduling periodic tasks.
       MODE: beat
     depends_on:
+      init_permissions:
+        condition: service_completed_successfully
       db_postgres:
         condition: service_healthy
         required: false
@@ -100,29 +359,45 @@ services:
         required: false
       redis:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A celery_healthcheck.celery inspect ping"]
+      interval: ${COMPOSE_WORKER_HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${COMPOSE_WORKER_HEALTHCHECK_TIMEOUT:-30s}
+      retries: 3
+      start_period: 60s
+      disable: ${COMPOSE_WORKER_HEALTHCHECK_DISABLED:-true}
     networks:
       - ssrf_proxy_network
       - default
 
   # Frontend web application.
   web:
-    image: langgenius/dify-web:1.10.1
+    image: langgenius/dify-web:1.16.0-rc1
     restart: always
+    env_file:
+      - path: ./envs/core-services/web.env
+        required: false
+      - path: ./envs/security.env
+        required: false
+      - ./.env
     environment:
       CONSOLE_API_URL: ${CONSOLE_API_URL:-}
+      SERVER_CONSOLE_API_URL: ${SERVER_CONSOLE_API_URL:-http://api:5001}
       APP_API_URL: ${APP_API_URL:-}
+      AMPLITUDE_API_KEY: ${AMPLITUDE_API_KEY:-}
       NEXT_PUBLIC_COOKIE_DOMAIN: ${NEXT_PUBLIC_COOKIE_DOMAIN:-}
+      NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-ws://localhost}
       SENTRY_DSN: ${WEB_SENTRY_DSN:-}
       NEXT_TELEMETRY_DISABLED: ${NEXT_TELEMETRY_DISABLED:-0}
+      EXPERIMENTAL_ENABLE_VINEXT: ${EXPERIMENTAL_ENABLE_VINEXT:-false}
       TEXT_GENERATION_TIMEOUT_MS: ${TEXT_GENERATION_TIMEOUT_MS:-60000}
       CSP_WHITELIST: ${CSP_WHITELIST:-}
       ALLOW_EMBED: ${ALLOW_EMBED:-false}
       ALLOW_UNSAFE_DATA_SCHEME: ${ALLOW_UNSAFE_DATA_SCHEME:-false}
       MARKETPLACE_API_URL: ${MARKETPLACE_API_URL:-https://marketplace.dify.ai}
       MARKETPLACE_URL: ${MARKETPLACE_URL:-https://marketplace.dify.ai}
-      TOP_K_MAX_VALUE: ${TOP_K_MAX_VALUE:-}
-      INDEXING_MAX_SEGMENTATION_TOKENS_LENGTH: ${INDEXING_MAX_SEGMENTATION_TOKENS_LENGTH:-}
-      PM2_INSTANCES: ${PM2_INSTANCES:-2}
+      TOP_K_MAX_VALUE: ${TOP_K_MAX_VALUE:-10}
+      INDEXING_MAX_SEGMENTATION_TOKENS_LENGTH: ${INDEXING_MAX_SEGMENTATION_TOKENS_LENGTH:-4000}
       LOOP_NODE_MAX_COUNT: ${LOOP_NODE_MAX_COUNT:-100}
       MAX_TOOLS_NUM: ${MAX_TOOLS_NUM:-10}
       MAX_PARALLEL_LIMIT: ${MAX_PARALLEL_LIMIT:-10}
@@ -139,9 +414,9 @@ services:
       - postgresql
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-difyai123456}
-      POSTGRES_DB: ${POSTGRES_DB:-dify}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-difyai123456}
+      POSTGRES_DB: ${DB_DATABASE:-dify}
       PGDATA: ${PGDATA:-/var/lib/postgresql/data/pgdata}
     command: >
       postgres -c 'max_connections=${POSTGRES_MAX_CONNECTIONS:-100}'
@@ -161,7 +436,7 @@ services:
           "-h",
           "db_postgres",
           "-U",
-          "${PGUSER:-postgres}",
+          "${DB_USERNAME:-postgres}",
           "-d",
           "${DB_DATABASE:-dify}",
         ]
@@ -176,10 +451,10 @@ services:
       - mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-difyai123456}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-dify}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-difyai123456}
+      MYSQL_DATABASE: ${DB_DATABASE:-dify}
     command: >
-      --max_connections=1000
+      --max_connections=${MYSQL_MAX_CONNECTIONS:-1000}
       --innodb_buffer_pool_size=${MYSQL_INNODB_BUFFER_POOL_SIZE:-512M}
       --innodb_log_file_size=${MYSQL_INNODB_LOG_FILE_SIZE:-128M}
       --innodb_flush_log_at_trx_commit=${MYSQL_INNODB_FLUSH_LOG_AT_TRX_COMMIT:-2}
@@ -193,7 +468,7 @@ services:
           "ping",
           "-u",
           "root",
-          "-p${MYSQL_PASSWORD:-difyai123456}",
+          "-p${DB_PASSWORD:-difyai123456}",
         ]
       interval: 1s
       timeout: 3s
@@ -219,8 +494,14 @@ services:
 
   # The DifySandbox
   sandbox:
-    image: langgenius/dify-sandbox:0.2.12
+    image: langgenius/dify-sandbox:0.2.15
     restart: always
+    env_file:
+      - path: ./envs/core-services/sandbox.env
+        required: false
+      - path: ./envs/security.env
+        required: false
+      - ./.env
     environment:
       # The DifySandbox configurations
       # Make sure you are changing this key for your deployment with a strong key.
@@ -241,14 +522,45 @@ services:
     networks:
       - ssrf_proxy_network
 
-  # plugin daemon
-  plugin_daemon:
-    image: langgenius/dify-plugin-daemon:0.4.1-local
+  # Local sandbox for Dify Agent shell workspaces.
+  local_sandbox:
+    image: langgenius/dify-agent-local-sandbox:1.16.0-rc1
     restart: always
     environment:
-      # Use the shared environment variables.
-      <<: *shared-api-worker-env
+      SHELLCTL_AUTH_TOKEN: ${DIFY_AGENT_SHELLCTL_AUTH_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - default
+
+  # plugin daemon
+  plugin_daemon:
+    image: langgenius/dify-plugin-daemon:0.6.3-local
+    restart: always
+    env_file:
+      - path: ./envs/core-services/shared.env
+        required: false
+      - path: ./envs/core-services/plugin-daemon.env
+        required: false
+      - path: ./envs/security.env
+        required: false
+      - path: ./envs/databases/db-postgres.env
+        required: false
+      - path: ./envs/databases/db-mysql.env
+        required: false
+      - path: ./envs/databases/redis.env
+        required: false
+      - ./.env
+    networks:
+      - ssrf_proxy_network
+      - default
+    environment:
       DB_DATABASE: ${DB_PLUGIN_DATABASE:-dify_plugin}
+      DB_SSL_MODE: ${DB_SSL_MODE:-disable}
       SERVER_PORT: ${PLUGIN_DAEMON_PORT:-5002}
       SERVER_KEY: ${PLUGIN_DAEMON_KEY:-lYkiYYT6owG+71oLerGzA7GXCgOT++6ovaezWAjpCjf+Sjc3ZtU+qUEi}
       MAX_PLUGIN_PACKAGE_SIZE: ${PLUGIN_MAX_PACKAGE_SIZE:-52428800}
@@ -312,6 +624,44 @@ services:
         condition: service_healthy
         required: false
 
+  # Dify Agent backend service.
+  agent_backend:
+    image: langgenius/dify-agent-backend:1.16.0-rc1
+    restart: always
+    env_file:
+      - path: ./envs/core-services/dify-agent.env
+        required: false
+      - path: ./envs/security.env
+        required: false
+      - path: ./envs/databases/redis.env
+        required: false
+      - ./.env
+    environment:
+      DIFY_AGENT_REDIS_URL: ${DIFY_AGENT_REDIS_URL:-redis://:${REDIS_PASSWORD:-difyai123456}@redis:6379/2}
+      DIFY_AGENT_REDIS_PREFIX: ${DIFY_AGENT_REDIS_PREFIX:-dify-agent}
+      DIFY_AGENT_PLUGIN_DAEMON_URL: ${DIFY_AGENT_PLUGIN_DAEMON_URL:-${PLUGIN_DAEMON_URL:-http://plugin_daemon:5002}}
+      DIFY_AGENT_PLUGIN_DAEMON_API_KEY: ${DIFY_AGENT_PLUGIN_DAEMON_API_KEY:-${PLUGIN_DAEMON_KEY:-lYkiYYT6owG+71oLerGzA7GXCgOT++6ovaezWAjpCjf+Sjc3ZtU+qUEi}}
+      DIFY_AGENT_INNER_API_URL: ${DIFY_AGENT_INNER_API_URL:-${PLUGIN_DIFY_INNER_API_URL:-http://api:5001}}
+      DIFY_AGENT_INNER_API_KEY: ${DIFY_AGENT_INNER_API_KEY:-${PLUGIN_DIFY_INNER_API_KEY:-QaHbTe77CtuXmsfyhR7+vRjI/+XbV1AaFy691iy+kGDv2Jvy0/eAh8Y1}}
+      DIFY_AGENT_SHELLCTL_ENTRYPOINT: ${DIFY_AGENT_SHELLCTL_ENTRYPOINT:-http://local_sandbox:5004}
+      DIFY_AGENT_SHELLCTL_AUTH_TOKEN: ${DIFY_AGENT_SHELLCTL_AUTH_TOKEN:-}
+      DIFY_AGENT_STUB_API_BASE_URL: ${DIFY_AGENT_STUB_API_BASE_URL:-http://agent_backend:5050/agent-stub}
+      # This is security-sensitive: it derives the JWE encryption key for Agent Stub bearer tokens.
+      # Replace this development default in production.
+      # Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'
+      DIFY_AGENT_SERVER_SECRET_KEY: ${DIFY_AGENT_SERVER_SECRET_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY}
+      DIFY_AGENT_SHUTDOWN_GRACE_SECONDS: ${DIFY_AGENT_SHUTDOWN_GRACE_SECONDS:-30}
+      DIFY_AGENT_RUN_RETENTION_SECONDS: ${DIFY_AGENT_RUN_RETENTION_SECONDS:-259200}
+    depends_on:
+      redis:
+        condition: service_started
+      plugin_daemon:
+        condition: service_started
+      local_sandbox:
+        condition: service_started
+    networks:
+      - default
+
   # ssrf_proxy server
   # for more information, please refer to
   # https://docs.dify.ai/learn-more/faq/install-faq#18-why-is-ssrf-proxy-needed%3F
@@ -331,9 +681,8 @@ services:
       # pls clearly modify the squid env vars to fit your network environment.
       HTTP_PORT: ${SSRF_HTTP_PORT:-3128}
       COREDUMP_DIR: ${SSRF_COREDUMP_DIR:-/var/spool/squid}
-      REVERSE_PROXY_PORT: ${SSRF_REVERSE_PROXY_PORT:-8194}
-      SANDBOX_HOST: ${SSRF_SANDBOX_HOST:-sandbox}
-      SANDBOX_PORT: ${SANDBOX_PORT:-8194}
+      SSRF_PROXY_ALLOW_PRIVATE_IPS: ${SSRF_PROXY_ALLOW_PRIVATE_IPS:-}
+      SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: ${SSRF_PROXY_ALLOW_PRIVATE_DOMAINS:-}
     networks:
       - ssrf_proxy_network
       - default
@@ -352,8 +701,8 @@ services:
       - ./certbot/update-cert.template.txt:/update-cert.template.txt
       - ./certbot/docker-entrypoint.sh:/docker-entrypoint.sh
     environment:
-      - CERTBOT_EMAIL=${CERTBOT_EMAIL}
-      - CERTBOT_DOMAIN=${CERTBOT_DOMAIN}
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-}
+      - CERTBOT_DOMAIN=${CERTBOT_DOMAIN:-}
       - CERTBOT_OPTIONS=${CERTBOT_OPTIONS:-}
     entrypoint: ["/docker-entrypoint.sh"]
     command: ["tail", "-f", "/dev/null"]
@@ -388,13 +737,14 @@ services:
       # and modify the env vars below in .env if HTTPS_ENABLED is true.
       NGINX_SSL_CERT_FILENAME: ${NGINX_SSL_CERT_FILENAME:-dify.crt}
       NGINX_SSL_CERT_KEY_FILENAME: ${NGINX_SSL_CERT_KEY_FILENAME:-dify.key}
-      NGINX_SSL_PROTOCOLS: ${NGINX_SSL_PROTOCOLS:-TLSv1.1 TLSv1.2 TLSv1.3}
+      NGINX_SSL_PROTOCOLS: ${NGINX_SSL_PROTOCOLS:-TLSv1.2 TLSv1.3}
       NGINX_WORKER_PROCESSES: ${NGINX_WORKER_PROCESSES:-auto}
       NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-100M}
       NGINX_KEEPALIVE_TIMEOUT: ${NGINX_KEEPALIVE_TIMEOUT:-65}
       NGINX_PROXY_READ_TIMEOUT: ${NGINX_PROXY_READ_TIMEOUT:-3600s}
       NGINX_PROXY_SEND_TIMEOUT: ${NGINX_PROXY_SEND_TIMEOUT:-3600s}
       NGINX_ENABLE_CERTBOT_CHALLENGE: ${NGINX_ENABLE_CERTBOT_CHALLENGE:-false}
+      NGINX_SOCKET_IO_UPSTREAM: ${NGINX_SOCKET_IO_UPSTREAM:-api_websocket:5001}
       CERTBOT_DOMAIN: ${CERTBOT_DOMAIN:-}
     depends_on:
       - api
@@ -425,6 +775,10 @@ services:
       AUTHENTICATION_APIKEY_USERS: ${WEAVIATE_AUTHENTICATION_APIKEY_USERS:-hello@dify.ai}
       AUTHORIZATION_ADMINLIST_ENABLED: ${WEAVIATE_AUTHORIZATION_ADMINLIST_ENABLED:-true}
       AUTHORIZATION_ADMINLIST_USERS: ${WEAVIATE_AUTHORIZATION_ADMINLIST_USERS:-hello@dify.ai}
+      DISABLE_TELEMETRY: ${WEAVIATE_DISABLE_TELEMETRY:-false}
+      ENABLE_TOKENIZER_GSE: ${WEAVIATE_ENABLE_TOKENIZER_GSE:-false}
+      ENABLE_TOKENIZER_KAGOME_JA: ${WEAVIATE_ENABLE_TOKENIZER_KAGOME_JA:-false}
+      ENABLE_TOKENIZER_KAGOME_KR: ${WEAVIATE_ENABLE_TOKENIZER_KAGOME_KR:-false}
 
   # OceanBase vector database
   oceanbase:
@@ -444,7 +798,8 @@ services:
       OB_CLUSTER_NAME: ${OCEANBASE_CLUSTER_NAME:-difyai}
       OB_SERVER_IP: 127.0.0.1
       MODE: mini
-      LANG: en_US.UTF-8
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
     ports:
       - "${OCEANBASE_VECTOR_PORT:-2881}:2881"
     healthcheck:
@@ -618,6 +973,27 @@ services:
       CHROMA_SERVER_AUTHN_PROVIDER: ${CHROMA_SERVER_AUTHN_PROVIDER:-chromadb.auth.token_authn.TokenAuthenticationServerProvider}
       IS_PERSISTENT: ${CHROMA_IS_PERSISTENT:-TRUE}
 
+  # InterSystems IRIS vector database
+  iris:
+    image: containers.intersystems.com/intersystems/iris-community:2025.3
+    profiles:
+      - iris
+    container_name: iris
+    restart: always
+    init: true
+    ports:
+      - "${IRIS_SUPER_SERVER_PORT:-1972}:1972"
+      - "${IRIS_WEB_SERVER_PORT:-52773}:52773"
+    volumes:
+      - ./volumes/iris:/durable
+      - ./iris/iris-init.script:/iris-init.script
+      - ./iris/docker-entrypoint.sh:/custom-entrypoint.sh
+    entrypoint: ["/custom-entrypoint.sh"]
+    tty: true
+    environment:
+      TZ: ${IRIS_TIMEZONE:-UTC}
+      ISC_DATA_DIRECTORY: /durable/iris
+
   # Oracle vector database
   oracle:
     image: container-registry.oracle.com/database/free:latest
@@ -676,7 +1052,7 @@ services:
 
   milvus-standalone:
     container_name: milvus-standalone
-    image: milvusdb/milvus:v2.5.15
+    image: milvusdb/milvus:v2.6.3
     profiles:
       - milvus
     command: ["milvus", "run", "standalone"]

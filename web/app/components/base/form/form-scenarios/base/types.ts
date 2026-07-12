@@ -1,6 +1,5 @@
+import type { Option } from '../../components/field/select'
 import type { TransferMethod } from '@/types/app'
-import type { Option } from '../../../select/pure'
-import type { CustomActionsProps } from '../../components/form/actions'
 
 export enum BaseFieldType {
   textInput = 'text-input',
@@ -33,7 +32,7 @@ export type SelectConfiguration = {
   }
 }
 
-export type FileConfiguration = {
+type FileConfiguration = {
   allowedFileTypes: string[]
   allowedFileExtensions: string[]
   allowedFileUploadMethods: TransferMethod[]
@@ -50,12 +49,5 @@ export type BaseConfiguration = {
   type: BaseFieldType
   tooltip?: string // Tooltip for this field
 } & NumberConfiguration
-  & Partial<SelectConfiguration>
-  & Partial<FileConfiguration>
-
-export type BaseFormProps = {
-  initialData?: Record<string, any>
-  configurations: BaseConfiguration[]
-  CustomActions?: (props: CustomActionsProps) => React.ReactNode
-  onSubmit: (value: Record<string, any>) => void
-}
+& Partial<SelectConfiguration>
+& Partial<FileConfiguration>

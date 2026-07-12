@@ -1,16 +1,17 @@
+import type { TFunction } from 'i18next'
 import type { NodeDefault } from '../../types'
 import type { DataSourceNodeType } from './types'
-import { DataSourceClassification } from './types'
-import { genNodeMetaData } from '@/app/components/workflow/utils'
+import { VarType as VarKindType } from '@/app/components/workflow/nodes/tool/types'
 import { BlockEnum } from '@/app/components/workflow/types'
+import { genNodeMetaData } from '@/app/components/workflow/utils'
+import { getMatchedSchemaType } from '../_base/components/variable/use-match-schema-type'
 import {
   COMMON_OUTPUT,
   LOCAL_FILE_OUTPUT,
 } from './constants'
-import { VarType as VarKindType } from '@/app/components/workflow/nodes/tool/types'
-import { getMatchedSchemaType } from '../_base/components/variable/use-match-schema-type'
+import { DataSourceClassification } from './types'
 
-const i18nPrefix = 'workflow.errorMsg'
+const i18nPrefix = 'errorMsg'
 
 const metaData = genNodeMetaData({
   sort: -1,
@@ -24,11 +25,11 @@ const nodeDefault: NodeDefault<DataSourceNodeType> = {
     datasource_parameters: {},
     datasource_configurations: {},
   },
-  checkValid(payload, t, moreDataForCheckValid) {
+  checkValid(payload, t: TFunction<'workflow'>, moreDataForCheckValid) {
     const { dataSourceInputsSchema, notAuthed } = moreDataForCheckValid
     let errorMessage = ''
     if (notAuthed)
-      errorMessage = t(`${i18nPrefix}.authRequired`)
+      errorMessage = t($ => $[`${i18nPrefix}.authRequired`], { ns: 'workflow' })
 
     if (!errorMessage) {
       dataSourceInputsSchema.filter((field: any) => {
@@ -36,17 +37,17 @@ const nodeDefault: NodeDefault<DataSourceNodeType> = {
       }).forEach((field: any) => {
         const targetVar = payload.datasource_parameters[field.variable]
         if (!targetVar) {
-          errorMessage = t(`${i18nPrefix}.fieldRequired`, { field: field.label })
+          errorMessage = t($ => $[`${i18nPrefix}.fieldRequired`], { ns: 'workflow', field: field.label })
           return
         }
         const { type: variable_type, value } = targetVar
         if (variable_type === VarKindType.variable) {
           if (!errorMessage && (!value || value.length === 0))
-            errorMessage = t(`${i18nPrefix}.fieldRequired`, { field: field.label })
+            errorMessage = t($ => $[`${i18nPrefix}.fieldRequired`], { ns: 'workflow', field: field.label })
         }
         else {
           if (!errorMessage && (value === undefined || value === null || value === ''))
-            errorMessage = t(`${i18nPrefix}.fieldRequired`, { field: field.label })
+            errorMessage = t($ => $[`${i18nPrefix}.fieldRequired`], { ns: 'workflow', field: field.label })
         }
       })
     }
@@ -86,12 +87,14 @@ const nodeDefault: NodeDefault<DataSourceNodeType> = {
           type,
           description: output.description,
           schemaType,
-          children: output.type === 'object' ? {
-            schema: {
-              type: 'object',
-              properties: output.properties,
-            },
-          } : undefined,
+          children: output.type === 'object'
+            ? {
+                schema: {
+                  type: 'object',
+                  properties: output.properties,
+                },
+              }
+            : undefined,
         })
       })
     }

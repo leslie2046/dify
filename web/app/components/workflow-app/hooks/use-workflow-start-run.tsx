@@ -1,27 +1,35 @@
+import type {
+  useNodesSyncDraft,
+  useWorkflowRun,
+} from '.'
 import { useCallback } from 'react'
 import { useStoreApi } from 'reactflow'
+import { useFeaturesStore } from '@/app/components/base/features/hooks'
+import { TriggerType } from '@/app/components/workflow/header/test-run-menu'
+import { useWorkflowInteractions } from '@/app/components/workflow/hooks'
 import { useWorkflowStore } from '@/app/components/workflow/store'
 import {
   BlockEnum,
   WorkflowRunningStatus,
 } from '@/app/components/workflow/types'
-import { useWorkflowInteractions } from '@/app/components/workflow/hooks'
-import { useFeaturesStore } from '@/app/components/base/features/hooks'
 import {
   useIsChatMode,
-  useNodesSyncDraft,
-  useWorkflowRun,
+  useNodesSyncDraftByCanEdit,
+  useWorkflowRunByCanEdit,
 } from '.'
-import { TriggerType } from '@/app/components/workflow/header/test-run-menu'
 
-export const useWorkflowStartRun = () => {
+type HandleRun = ReturnType<typeof useWorkflowRun>['handleRun']
+type DoSyncWorkflowDraft = ReturnType<typeof useNodesSyncDraft>['doSyncWorkflowDraft']
+
+const useWorkflowStartRunBase = (
+  handleRun: HandleRun,
+  doSyncWorkflowDraft: DoSyncWorkflowDraft,
+) => {
   const store = useStoreApi()
   const workflowStore = useWorkflowStore()
   const featuresStore = useFeaturesStore()
   const isChatMode = useIsChatMode()
   const { handleCancelDebugAndPreviewPanel } = useWorkflowInteractions()
-  const { handleRun } = useWorkflowRun()
-  const { doSyncWorkflowDraft } = useNodesSyncDraft()
 
   const handleWorkflowStartRunInWorkflow = useCallback(async () => {
     const {
@@ -34,6 +42,9 @@ export const useWorkflowStartRun = () => {
     const { getNodes } = store.getState()
     const nodes = getNodes()
     const startNode = nodes.find(node => node.data.type === BlockEnum.Start)
+    if (!startNode)
+      return
+
     const startVariables = startNode?.data.variables || []
     const fileSettings = featuresStore!.getState().features.file
     const {
@@ -299,4 +310,11 @@ export const useWorkflowStartRun = () => {
     handleWorkflowTriggerPluginRunInWorkflow,
     handleWorkflowRunAllTriggersInWorkflow,
   }
+}
+
+export const useWorkflowStartRunByCanEdit = (canEdit: boolean) => {
+  const { handleRun } = useWorkflowRunByCanEdit(canEdit)
+  const { doSyncWorkflowDraft } = useNodesSyncDraftByCanEdit(canEdit)
+
+  return useWorkflowStartRunBase(handleRun, doSyncWorkflowDraft)
 }

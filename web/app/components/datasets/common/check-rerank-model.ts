@@ -1,9 +1,9 @@
-import { RETRIEVE_METHOD, type RetrievalConfig } from '@/types/app'
 import type {
-  DefaultModelResponse,
   Model,
 } from '@/app/components/header/account-setting/model-provider-page/declarations'
+import type { RetrievalConfig } from '@/types/app'
 import { RerankingModeEnum } from '@/models/datasets'
+import { RETRIEVE_METHOD } from '@/types/app'
 
 export const isReRankModelSelected = ({
   retrievalConfig,
@@ -29,42 +29,17 @@ export const isReRankModelSelected = ({
     && ([RETRIEVE_METHOD.semantic, RETRIEVE_METHOD.fullText].includes(retrievalConfig.search_method))
     && retrievalConfig.reranking_enable
     && !rerankModelSelected
-  )
+  ) {
     return false
+  }
 
   if (
     indexMethod === 'high_quality'
     && (retrievalConfig.search_method === RETRIEVE_METHOD.hybrid && retrievalConfig.reranking_mode !== RerankingModeEnum.WeightedScore)
     && !rerankModelSelected
-  )
+  ) {
     return false
+  }
 
   return true
-}
-
-export const ensureRerankModelSelected = ({
-  rerankDefaultModel,
-  indexMethod,
-  retrievalConfig,
-}: {
-  rerankDefaultModel: DefaultModelResponse
-  retrievalConfig: RetrievalConfig
-  indexMethod?: string
-}) => {
-  const rerankModel = retrievalConfig.reranking_model?.reranking_model_name ? retrievalConfig.reranking_model : undefined
-  if (
-    indexMethod === 'high_quality'
-    && (retrievalConfig.reranking_enable || retrievalConfig.search_method === RETRIEVE_METHOD.hybrid)
-    && !rerankModel
-    && rerankDefaultModel
-  ) {
-    return {
-      ...retrievalConfig,
-      reranking_model: {
-        reranking_provider_name: rerankDefaultModel.provider.provider,
-        reranking_model_name: rerankDefaultModel.model,
-      },
-    }
-  }
-  return retrievalConfig
 }

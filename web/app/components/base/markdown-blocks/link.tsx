@@ -3,21 +3,35 @@
  * Extracted from the main markdown renderer for modularity.
  * Handles special rendering for "abbr:" type links for interactive chat actions.
  */
-import React from 'react'
+import * as React from 'react'
 import { useChatContext } from '@/app/components/base/chat/chat/context'
 import { isValidUrl } from './utils'
 
+const filePreviewPathPattern = /\/files\/[^/?#]+\/file-preview(?:[?#]|$)/
+const asAttachmentParamPattern = /[?&]as_attachment=/
+
+const withFilePreviewAttachment = (href: string) => {
+  if (!filePreviewPathPattern.test(href) || asAttachmentParamPattern.test(href))
+    return href
+
+  const url = new URL(href, 'http://dify.local')
+  url.searchParams.set('as_attachment', 'true')
+
+  return href.startsWith('//') ? url.href.replace(url.protocol, '') : url.href
+}
+
 const Link = ({ node, children, ...props }: any) => {
   const { onSend } = useChatContext()
-  const commonClassName = 'cursor-pointer underline !decoration-primary-700 decoration-dashed'
+  const commonClassName = 'cursor-pointer underline decoration-primary-700! decoration-dashed'
   if (node.properties?.href && node.properties.href?.toString().startsWith('abbr')) {
     const hidden_text = decodeURIComponent(node.properties.href.toString().split('abbr:')[1])
 
     return <abbr className={commonClassName} onClick={() => onSend?.(hidden_text)} title={node.children[0]?.value || ''}>{node.children[0]?.value || ''}</abbr>
   }
   else {
-    const href = props.href || node.properties?.href
-    if (href && /^#[a-zA-Z0-9_-]+$/.test(href.toString())) {
+    const rawHref = props.href || node.properties?.href
+    const href = rawHref?.toString()
+    if (href && /^#[\w-]+$/.test(href)) {
       const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
         // scroll to target element if exists within the answer container
@@ -36,7 +50,7 @@ const Link = ({ node, children, ...props }: any) => {
     if (!href || !isValidUrl(href))
       return <span>{children}</span>
 
-    return <a href={href} target="_blank" rel="noopener noreferrer" className={commonClassName}>{children || 'Download'}</a>
+    return <a href={withFilePreviewAttachment(href)} target="_blank" rel="noopener noreferrer" className={commonClassName}>{children || 'Download'}</a>
   }
 }
 

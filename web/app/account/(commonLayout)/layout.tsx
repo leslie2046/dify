@@ -1,35 +1,25 @@
-import React from 'react'
-import type { ReactNode } from 'react'
-import Header from './header'
-import SwrInitor from '@/app/components/swr-initializer'
-import { AppContextProvider } from '@/context/app-context'
-import GA, { GaType } from '@/app/components/base/ga'
+import * as React from 'react'
+import { ConsoleContextProviders, ConsoleRuntimeProviders } from '@/app/(commonLayout)/providers'
 import HeaderWrapper from '@/app/components/header/header-wrapper'
-import { EventEmitterContextProvider } from '@/context/event-emitter'
-import { ProviderContextProvider } from '@/context/provider-context'
-import { ModalContextProvider } from '@/context/modal-context'
+import MaintenanceNotice from '@/app/components/header/maintenance-notice'
+import Header from './header'
 
-const Layout = ({ children }: { children: ReactNode }) => {
+export default async function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <GA gaType={GaType.admin} />
-      <SwrInitor>
-        <AppContextProvider>
-          <EventEmitterContextProvider>
-            <ProviderContextProvider>
-              <ModalContextProvider>
-                <HeaderWrapper>
-                  <Header />
-                </HeaderWrapper>
-                <div className='relative flex h-0 shrink-0 grow flex-col overflow-y-auto bg-components-panel-bg'>
-                  {children}
-                </div>
-              </ModalContextProvider>
-            </ProviderContextProvider>
-          </EventEmitterContextProvider>
-        </AppContextProvider>
-      </SwrInitor>
-    </>
+    <React.Fragment>
+      <ConsoleRuntimeProviders>
+        <div className="flex h-full flex-col overflow-hidden bg-background-body">
+          <MaintenanceNotice />
+          <ConsoleContextProviders>
+            <HeaderWrapper>
+              <Header />
+            </HeaderWrapper>
+            <div className="relative flex h-0 min-h-0 shrink-0 grow flex-col overflow-y-auto bg-components-panel-bg">
+              {children}
+            </div>
+          </ConsoleContextProviders>
+        </div>
+      </ConsoleRuntimeProviders>
+    </React.Fragment>
   )
 }
-export default Layout

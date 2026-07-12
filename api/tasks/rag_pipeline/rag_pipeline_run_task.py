@@ -3,14 +3,16 @@ import json
 import logging
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from itertools import islice
 from typing import Any
 
 import click
-from celery import shared_task  # type: ignore
+from celery import group, shared_task
 from flask import current_app, g
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select
+from sqlalchemy.orm import sessionmaker
 
 from configs import dify_config
 from core.app.entities.app_invoke_entities import InvokeFrom, RagPipelineGenerateEntity
@@ -25,6 +27,11 @@ from models.workflow import Workflow, WorkflowNodeExecutionTriggeredFrom
 from services.file_service import FileService
 
 logger = logging.getLogger(__name__)
+
+
+def chunked(iterable: Sequence, size: int):
+    it = iter(iterable)
+    return iter(lambda: list(islice(it, size)), [])
 
 
 @shared_task(queue="pipeline")
@@ -47,6 +54,8 @@ def rag_pipeline_run_task(
         )
         rag_pipeline_invoke_entities = json.loads(rag_pipeline_invoke_entities_content)
 
+        logger.info("tenant %s received %d rag pipeline invoke entities", tenant_id, len(rag_pipeline_invoke_entities))
+
         # Get Flask app object for thread context
         flask_app = current_app._get_current_object()  # type: ignore
 
@@ -66,7 +75,7 @@ def rag_pipeline_run_task(
         end_at = time.perf_counter()
         logging.info(
             click.style(
-                f"tenant_id: {tenant_id} , Rag pipeline run completed. Latency: {end_at - start_at}s", fg="green"
+                f"tenant_id: {tenant_id}, Rag pipeline run completed. Latency: {end_at - start_at}s", fg="green"
             )
         )
     except Exception:
@@ -78,19 +87,27 @@ def rag_pipeline_run_task(
         # Check if there are waiting tasks in the queue
         # Use rpop to get the next task from the queue (FIFO order)
         next_file_ids = tenant_isolated_task_queue.pull_tasks(count=dify_config.TENANT_ISOLATED_TASK_CONCURRENCY)
-        logger.info("rag pipeline tenant isolation queue next files: %s", next_file_ids)
+        logger.info("rag pipeline tenant isolation queue %s next files: %s", tenant_id, next_file_ids)
 
         if next_file_ids:
-            for next_file_id in next_file_ids:
-                # Process the next waiting task
-                # Keep the flag set to indicate a task is running
-                tenant_isolated_task_queue.set_task_waiting_time()
-                rag_pipeline_run_task.delay(  # type: ignore
-                    rag_pipeline_invoke_entities_file_id=next_file_id.decode("utf-8")
-                    if isinstance(next_file_id, bytes)
-                    else next_file_id,
-                    tenant_id=tenant_id,
-                )
+            for batch in chunked(next_file_ids, 100):
+                jobs = []
+                for next_file_id in batch:
+                    tenant_isolated_task_queue.set_task_waiting_time()
+
+                    file_id = (
+                        next_file_id.decode("utf-8") if isinstance(next_file_id, (bytes, bytearray)) else next_file_id
+                    )
+
+                    jobs.append(
+                        rag_pipeline_run_task.s(
+                            rag_pipeline_invoke_entities_file_id=file_id,
+                            tenant_id=tenant_id,
+                        )
+                    )
+
+                if jobs:
+                    group(jobs).apply_async()
         else:
             # No more waiting tasks, clear the flag
             tenant_isolated_task_queue.delete_task_key()
@@ -114,22 +131,22 @@ def run_single_rag_pipeline_task(rag_pipeline_invoke_entity: Mapping[str, Any], 
             workflow_thread_pool_id = rag_pipeline_invoke_entity_model.workflow_thread_pool_id
             application_generate_entity = rag_pipeline_invoke_entity_model.application_generate_entity
 
-            with Session(db.engine) as session:
+            with sessionmaker(db.engine, expire_on_commit=False).begin() as session:
                 # Load required entities
-                account = session.query(Account).where(Account.id == user_id).first()
+                account = session.scalar(select(Account).where(Account.id == user_id).limit(1))
                 if not account:
                     raise ValueError(f"Account {user_id} not found")
 
-                tenant = session.query(Tenant).where(Tenant.id == tenant_id).first()
+                tenant = session.scalar(select(Tenant).where(Tenant.id == tenant_id).limit(1))
                 if not tenant:
                     raise ValueError(f"Tenant {tenant_id} not found")
                 account.current_tenant = tenant
 
-                pipeline = session.query(Pipeline).where(Pipeline.id == pipeline_id).first()
+                pipeline = session.scalar(select(Pipeline).where(Pipeline.id == pipeline_id).limit(1))
                 if not pipeline:
                     raise ValueError(f"Pipeline {pipeline_id} not found")
 
-                workflow = session.query(Workflow).where(Workflow.id == pipeline.workflow_id).first()
+                workflow = session.scalar(select(Workflow).where(Workflow.id == pipeline.workflow_id).limit(1))
                 if not workflow:
                     raise ValueError(f"Workflow {pipeline.workflow_id} not found")
 
@@ -176,7 +193,7 @@ def run_single_rag_pipeline_task(rag_pipeline_invoke_entity: Mapping[str, Any], 
                     workflow_id=workflow_id,
                     user=account,
                     application_generate_entity=entity,
-                    invoke_from=InvokeFrom.PUBLISHED,
+                    invoke_from=InvokeFrom.PUBLISHED_PIPELINE,
                     workflow_execution_repository=workflow_execution_repository,
                     workflow_node_execution_repository=workflow_node_execution_repository,
                     streaming=streaming,

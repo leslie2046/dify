@@ -11,11 +11,14 @@ This test suite covers:
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, PropertyMock, patch
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
+from models.enums import ConversationFromSource
 from models.model import (
     App,
     AppAnnotationHitHistory,
@@ -27,6 +30,7 @@ from models.model import (
     Message,
     MessageAnnotation,
     Site,
+    load_annotation_reply_config,
 )
 
 
@@ -96,6 +100,7 @@ class TestAppModelValidation:
             "workflow",
             "advanced-chat",
             "agent-chat",
+            "agent",
             "channel",
             "rag-pipeline",
         }
@@ -114,7 +119,7 @@ class TestAppModelValidation:
     def test_icon_type_validation(self):
         """Test icon type enum values."""
         # Assert
-        assert {t.value for t in IconType} == {"image", "emoji"}
+        assert {t.value for t in IconType} == {"image", "emoji", "link"}
 
     def test_app_desc_or_prompt_with_description(self):
         """Test desc_or_prompt property when description exists."""
@@ -195,6 +200,55 @@ class TestAppModelValidation:
 
             # Assert
             assert result == AppMode.CHAT
+
+    def test_deleted_tools_checks_plugin_builtin_providers_through_core_plugin_service(self):
+        """Plugin-backed built-in tools are checked through core PluginService."""
+        # Arrange
+        app = App(
+            tenant_id="tenant-1",
+            name="Test App",
+            mode=AppMode.CHAT,
+            enable_site=True,
+            enable_api=False,
+            created_by=str(uuid4()),
+        )
+        app_model_config = AppModelConfig(
+            app_id=str(uuid4()),
+            agent_mode=json.dumps(
+                {
+                    "enabled": True,
+                    "strategy": "function_call",
+                    "tools": [
+                        {
+                            "provider_type": "builtin",
+                            "provider_id": "langgenius/openai/openai",
+                            "tool_name": "chat",
+                            "tool_parameters": {},
+                        }
+                    ],
+                    "prompt": None,
+                }
+            ),
+        )
+        session_context = MagicMock()
+        session_context.__enter__.return_value = MagicMock()
+        session_factory = SimpleNamespace(begin=MagicMock(return_value=session_context))
+
+        # Act
+        with (
+            patch.object(App, "app_model_config", new_callable=lambda: property(lambda self: app_model_config)),
+            patch("models.model.db", SimpleNamespace(engine=object())),
+            patch("models.model.sessionmaker", return_value=session_factory),
+            patch("core.tools.tool_manager.ToolManager.get_hardcoded_provider", side_effect=Exception),
+            patch("core.plugin.plugin_service.PluginService.check_tools_existence", return_value=[False]) as exists,
+        ):
+            result = app.deleted_tools
+
+        # Assert
+        assert result == [{"type": "builtin", "tool_name": "chat", "provider_id": "langgenius/openai/openai"}]
+        exists.assert_called_once()
+        assert exists.call_args.args[0] == "tenant-1"
+        assert [str(provider_id) for provider_id in exists.call_args.args[1]] == ["langgenius/openai/openai"]
 
 
 class TestAppModelConfig:
@@ -290,25 +344,69 @@ class TestAppModelConfig:
         # Assert
         assert result == questions
 
-    def test_app_model_config_annotation_reply_dict_disabled(self):
-        """Test annotation_reply_dict when annotation is disabled."""
-        # Arrange
-        config = AppModelConfig(
-            app_id=str(uuid4()),
-            provider="openai",
-            model_id="gpt-4",
-            created_by=str(uuid4()),
+    def test_to_dict_uses_injected_annotation_reply(self):
+        config = AppModelConfig(app_id=str(uuid4()))
+        annotation_reply = {"enabled": False}
+
+        with patch.object(
+            AppModelConfig,
+            "annotation_reply_dict",
+            new_callable=PropertyMock,
+            side_effect=AssertionError("annotation_reply_dict should not be accessed"),
+        ):
+            result = config.to_dict(annotation_reply=annotation_reply)
+
+        assert result["annotation_reply"] == annotation_reply
+
+
+class TestAnnotationReplyConfigLoader:
+    def test_load_annotation_reply_config_returns_disabled_when_setting_missing(self):
+        session = MagicMock()
+        session.scalar.return_value = None
+
+        result = load_annotation_reply_config(session, "app-1")
+
+        assert result == {"enabled": False}
+        session.scalar.assert_called_once()
+        stmt = session.scalar.call_args.args[0]
+        compiled = str(stmt.compile(dialect=postgresql.dialect()))
+        assert "app_annotation_settings.app_id" in compiled
+        assert stmt.compile().params == {"app_id_1": "app-1"}
+
+    def test_load_annotation_reply_config_returns_embedding_model(self):
+        session = MagicMock()
+        annotation_setting = SimpleNamespace(
+            id="annotation-1",
+            score_threshold=0.7,
+            collection_binding_id="binding-1",
         )
+        collection_binding = SimpleNamespace(provider_name="provider", model_name="embedding")
+        session.scalar.side_effect = [annotation_setting, collection_binding]
 
-        # Mock database query to return None
-        with patch("models.model.db.session.query") as mock_query:
-            mock_query.return_value.where.return_value.first.return_value = None
+        result = load_annotation_reply_config(session, "app-1")
 
-            # Act
-            result = config.annotation_reply_dict
+        assert result == {
+            "id": "annotation-1",
+            "enabled": True,
+            "score_threshold": 0.7,
+            "embedding_model": {
+                "embedding_provider_name": "provider",
+                "embedding_model_name": "embedding",
+            },
+        }
+        assert session.scalar.call_count == 2
+        stmt = session.scalar.call_args_list[1].args[0]
+        compiled = str(stmt.compile(dialect=postgresql.dialect()))
+        assert "dataset_collection_bindings.id" in compiled
+        assert stmt.compile().params == {"id_1": "binding-1"}
 
-            # Assert
-            assert result == {"enabled": False}
+    def test_load_annotation_reply_config_raises_when_binding_missing(self):
+        session = MagicMock()
+        annotation_setting = SimpleNamespace(collection_binding_id="binding-1")
+        session.scalar.side_effect = [annotation_setting, None]
+
+        with pytest.raises(ValueError, match="Collection binding detail not found"):
+            load_annotation_reply_config(session, "app-1")
 
 
 class TestConversationModel:
@@ -326,7 +424,7 @@ class TestConversationModel:
             mode=AppMode.CHAT,
             name="Test Conversation",
             status="normal",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             from_end_user_id=from_end_user_id,
         )
 
@@ -347,7 +445,7 @@ class TestConversationModel:
             mode=AppMode.CHAT,
             name="Test Conversation",
             status="normal",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             from_end_user_id=str(uuid4()),
         )
         conversation._inputs = inputs
@@ -366,7 +464,7 @@ class TestConversationModel:
             mode=AppMode.CHAT,
             name="Test Conversation",
             status="normal",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             from_end_user_id=str(uuid4()),
         )
         inputs = {"query": "Hello", "context": "test"}
@@ -385,7 +483,7 @@ class TestConversationModel:
             mode=AppMode.CHAT,
             name="Test Conversation",
             status="normal",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             from_end_user_id=str(uuid4()),
             summary="Test summary",
         )
@@ -404,7 +502,7 @@ class TestConversationModel:
             mode=AppMode.CHAT,
             name="Test Conversation",
             status="normal",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             from_end_user_id=str(uuid4()),
             summary=None,
         )
@@ -427,7 +525,7 @@ class TestConversationModel:
             mode=AppMode.CHAT,
             name="Test Conversation",
             status="normal",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             from_end_user_id=str(uuid4()),
             override_model_configs='{"model": "gpt-4"}',
         )
@@ -448,7 +546,7 @@ class TestConversationModel:
             mode=AppMode.CHAT,
             name="Test Conversation",
             status="normal",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             from_end_user_id=from_end_user_id,
             dialogue_count=5,
         )
@@ -489,7 +587,7 @@ class TestMessageModel:
             message_unit_price=Decimal("0.0001"),
             answer_unit_price=Decimal("0.0002"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
         )
 
         # Assert
@@ -513,7 +611,7 @@ class TestMessageModel:
             message_unit_price=Decimal("0.0001"),
             answer_unit_price=Decimal("0.0002"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
         )
         message._inputs = inputs
 
@@ -535,7 +633,7 @@ class TestMessageModel:
             message_unit_price=Decimal("0.0001"),
             answer_unit_price=Decimal("0.0002"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
         )
         inputs = {"query": "Hello", "context": "test"}
 
@@ -557,7 +655,7 @@ class TestMessageModel:
             message_unit_price=Decimal("0.0001"),
             answer_unit_price=Decimal("0.0002"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             override_model_configs='{"model": "gpt-4"}',
         )
 
@@ -580,7 +678,7 @@ class TestMessageModel:
             message_unit_price=Decimal("0.0001"),
             answer_unit_price=Decimal("0.0002"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             message_metadata=json.dumps(metadata),
         )
 
@@ -602,7 +700,7 @@ class TestMessageModel:
             message_unit_price=Decimal("0.0001"),
             answer_unit_price=Decimal("0.0002"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             message_metadata=None,
         )
 
@@ -629,7 +727,7 @@ class TestMessageModel:
             answer_unit_price=Decimal("0.0002"),
             total_price=Decimal("0.0003"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             status="normal",
         )
         message.id = str(uuid4())
@@ -730,6 +828,8 @@ class TestMessageAnnotation:
         annotation = MessageAnnotation(
             app_id=app_id,
             question="What is AI?",
+            conversation_id=None,
+            message_id=None,
             content="AI stands for Artificial Intelligence.",
             account_id=account_id,
         )
@@ -747,6 +847,8 @@ class TestMessageAnnotation:
         annotation = MessageAnnotation(
             app_id=str(uuid4()),
             question="Test question",
+            conversation_id=None,
+            message_id=None,
             content="Test content",
             account_id=str(uuid4()),
         )
@@ -949,19 +1051,6 @@ class TestSiteModel:
         with pytest.raises(ValueError, match="Custom disclaimer cannot exceed 512 characters"):
             site.custom_disclaimer = long_disclaimer
 
-    def test_site_generate_code(self):
-        """Test Site.generate_code static method."""
-        # Mock database query to return 0 (no existing codes)
-        with patch("models.model.db.session.query") as mock_query:
-            mock_query.return_value.where.return_value.count.return_value = 0
-
-            # Act
-            code = Site.generate_code(8)
-
-            # Assert
-            assert isinstance(code, str)
-            assert len(code) == 8
-
 
 class TestModelIntegration:
     """Test suite for model integration scenarios."""
@@ -992,7 +1081,7 @@ class TestModelIntegration:
             mode=AppMode.CHAT,
             name="Test Conversation",
             status="normal",
-            from_source="api",
+            from_source=ConversationFromSource.API,
             from_end_user_id=str(uuid4()),
         )
         conversation.id = conversation_id
@@ -1007,7 +1096,7 @@ class TestModelIntegration:
             message_unit_price=Decimal("0.0001"),
             answer_unit_price=Decimal("0.0002"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
         )
         message.id = message_id
 
@@ -1068,7 +1157,7 @@ class TestModelIntegration:
             message_unit_price=Decimal("0.0001"),
             answer_unit_price=Decimal("0.0002"),
             currency="USD",
-            from_source="api",
+            from_source=ConversationFromSource.API,
         )
         message.id = message_id
 
@@ -1100,6 +1189,8 @@ class TestModelIntegration:
             app_id=app_id,
             question="What is AI?",
             content="AI stands for Artificial Intelligence.",
+            conversation_id=None,
+            message_id=message_id,
             account_id=account_id,
         )
         annotation.id = annotation_id

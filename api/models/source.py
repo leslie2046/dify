@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from typing import Any, TypedDict
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -18,11 +19,13 @@ class DataSourceOauthBinding(TypeBase):
         adjusted_json_index("source_info_idx", "source_info"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     tenant_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     access_token: Mapped[str] = mapped_column(String(255), nullable=False)
     provider: Mapped[str] = mapped_column(String(255), nullable=False)
-    source_info: Mapped[dict] = mapped_column(AdjustedJSON, nullable=False)
+    source_info: Mapped[dict[str, Any]] = mapped_column(AdjustedJSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.current_timestamp(), init=False
     )
@@ -36,6 +39,17 @@ class DataSourceOauthBinding(TypeBase):
     disabled: Mapped[bool] = mapped_column(sa.Boolean, nullable=True, server_default=sa.text("false"), default=False)
 
 
+class DataSourceApiKeyAuthBindingDict(TypedDict):
+    id: str
+    tenant_id: str
+    category: str
+    provider: str
+    credentials: Any
+    created_at: float
+    updated_at: float
+    disabled: bool
+
+
 class DataSourceApiKeyAuthBinding(TypeBase):
     __tablename__ = "data_source_api_key_auth_bindings"
     __table_args__ = (
@@ -44,7 +58,9 @@ class DataSourceApiKeyAuthBinding(TypeBase):
         sa.Index("data_source_api_key_auth_binding_provider_idx", "provider"),
     )
 
-    id: Mapped[str] = mapped_column(StringUUID, default=lambda: str(uuid4()), init=False)
+    id: Mapped[str] = mapped_column(
+        StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
+    )
     tenant_id: Mapped[str] = mapped_column(StringUUID, nullable=False)
     category: Mapped[str] = mapped_column(String(255), nullable=False)
     provider: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -61,8 +77,8 @@ class DataSourceApiKeyAuthBinding(TypeBase):
     )
     disabled: Mapped[bool] = mapped_column(sa.Boolean, nullable=True, server_default=sa.text("false"), default=False)
 
-    def to_dict(self):
-        return {
+    def to_dict(self) -> DataSourceApiKeyAuthBindingDict:
+        result: DataSourceApiKeyAuthBindingDict = {
             "id": self.id,
             "tenant_id": self.tenant_id,
             "category": self.category,
@@ -72,3 +88,4 @@ class DataSourceApiKeyAuthBinding(TypeBase):
             "updated_at": self.updated_at.timestamp(),
             "disabled": self.disabled,
         }
+        return result

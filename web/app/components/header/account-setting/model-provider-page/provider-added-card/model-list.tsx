@@ -1,25 +1,24 @@
 import type { FC } from 'react'
-import { useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
-import {
-  RiArrowRightSLine,
-} from '@remixicon/react'
 import type {
   Credential,
   ModelItem,
   ModelProvider,
 } from '../declarations'
+import { useAtomValue } from 'jotai'
+import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import {
+  AddCustomModel,
+  ManageCustomModelCredentials,
+} from '@/app/components/header/account-setting/model-provider-page/model-auth'
+import { useModalContextSelector } from '@/context/modal-context'
+import { workspacePermissionKeysAtom } from '@/context/permission-state'
+import { hasPermission } from '@/utils/permission'
 import {
   ConfigurationMethodEnum,
 } from '../declarations'
 // import Tab from './tab'
 import ModelListItem from './model-list-item'
-import { useModalContextSelector } from '@/context/modal-context'
-import { useAppContext } from '@/context/app-context'
-import {
-  AddCustomModel,
-  ManageCustomModelCredentials,
-} from '@/app/components/header/account-setting/model-provider-page/model-auth'
 
 type ModelListProps = {
   provider: ModelProvider
@@ -35,7 +34,8 @@ const ModelList: FC<ModelListProps> = ({
 }) => {
   const { t } = useTranslation()
   const configurativeMethods = provider.configurate_methods.filter(method => method !== ConfigurationMethodEnum.fetchFromRemote)
-  const { isCurrentWorkspaceManager } = useAppContext()
+  const workspacePermissionKeys = useAtomValue(workspacePermissionKeysAtom)
+  const canConfigureModels = hasPermission(workspacePermissionKeys, 'plugin.model_config')
   const isConfigurable = configurativeMethods.includes(ConfigurationMethodEnum.customizableModel)
   const setShowModelLoadBalancingModal = useModalContextSelector(state => state.setShowModelLoadBalancingModal)
   const onModifyLoadBalancing = useCallback((model: ModelItem, credential?: Credential) => {
@@ -51,25 +51,26 @@ const ModelList: FC<ModelListProps> = ({
   }, [onChange, provider, setShowModelLoadBalancingModal])
 
   return (
-    <div className='rounded-b-xl px-2 pb-2'>
-      <div className='rounded-lg bg-components-panel-bg py-1'>
-        <div className='flex items-center pl-1 pr-[3px]'>
-          <span className='group mr-2 flex shrink-0 items-center'>
-            <span className='system-xs-medium inline-flex h-6 items-center pl-1 pr-1.5 text-text-tertiary group-hover:hidden'>
-              {t('common.modelProvider.modelsNum', { num: models.length })}
-              <RiArrowRightSLine className='mr-0.5 h-4 w-4 rotate-90' />
+    <div className="rounded-b-xl px-2 pb-2">
+      <div className="rounded-lg bg-components-panel-bg py-1">
+        <div className="flex items-center pr-0.75 pl-1">
+          <span className="group mr-2 flex shrink-0 items-center">
+            <span className="inline-flex h-6 items-center pr-1.5 pl-1 system-xs-medium text-text-tertiary group-hover:hidden">
+              {t($ => $['modelProvider.modelsNum'], { ns: 'common', num: models.length })}
+              <span className="mr-0.5 i-ri-arrow-right-s-line size-4 rotate-90" />
             </span>
-            <span
-              className='system-xs-medium hidden h-6 cursor-pointer items-center rounded-lg bg-state-base-hover pl-1 pr-1.5 text-text-tertiary group-hover:inline-flex'
+            <button
+              type="button"
+              className="hidden h-6 cursor-pointer items-center rounded-lg border-none bg-state-base-hover pr-1.5 pl-1 system-xs-medium text-text-tertiary group-hover:inline-flex"
               onClick={() => onCollapse()}
             >
-              {t('common.modelProvider.modelsNum', { num: models.length })}
-              <RiArrowRightSLine className='mr-0.5 h-4 w-4 rotate-90' />
-            </span>
+              {t($ => $['modelProvider.modelsNum'], { ns: 'common', num: models.length })}
+              <span className="mr-0.5 i-ri-arrow-right-s-line size-4 rotate-90" />
+            </button>
           </span>
           {
-            isConfigurable && isCurrentWorkspaceManager && (
-              <div className='flex grow justify-end'>
+            isConfigurable && canConfigureModels && (
+              <div className="flex grow justify-end">
                 <ManageCustomModelCredentials
                   provider={provider}
                   currentCustomConfigurationModelFixedFields={undefined}
@@ -91,6 +92,7 @@ const ModelList: FC<ModelListProps> = ({
                 model,
                 provider,
                 isConfigurable,
+                onChange,
                 onModifyLoadBalancing,
               }}
             />

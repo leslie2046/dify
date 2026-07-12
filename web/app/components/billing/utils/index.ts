@@ -1,6 +1,32 @@
+import type { BasicPlan, BillingQuota, CurrentPlanInfoBackend } from '../type'
 import dayjs from 'dayjs'
-import type { BillingQuota, CurrentPlanInfoBackend } from '../type'
 import { ALL_PLANS, NUM_INFINITE } from '@/app/components/billing/config'
+
+/**
+ * Parse vectorSpace string from ALL_PLANS config and convert to MB
+ * @example "50MB" -> 50, "5GB" -> 5120, "20GB" -> 20480
+ */
+export const parseVectorSpaceToMB = (vectorSpace: string): number => {
+  const match = /^(\d+)(MB|GB)$/i.exec(vectorSpace)
+  if (!match)
+    return 0
+
+  const value = Number.parseInt(match[1]!, 10)
+  const unit = match[2]!.toUpperCase()
+
+  return unit === 'GB' ? value * 1024 : value
+}
+
+/**
+ * Get the vector space limit in MB for a given plan type from ALL_PLANS config
+ */
+export const getPlanVectorSpaceLimitMB = (planType: BasicPlan): number => {
+  const planInfo = ALL_PLANS[planType]
+  if (!planInfo)
+    return 0
+
+  return parseVectorSpaceToMB(planInfo.vectorSpace)
+}
 
 const parseLimit = (limit: number) => {
   if (limit === 0)
@@ -53,6 +79,7 @@ const getResetInDaysFromDate = (resetDate?: number | null) => {
 export const parseCurrentPlan = (data: CurrentPlanInfoBackend) => {
   const planType = data.billing.subscription.plan
   const planPreset = ALL_PLANS[planType]
+  const vectorSpaceLimit = getPlanVectorSpaceLimitMB(planType)
   const resolveRateLimit = (limit?: number, fallback?: number) => {
     const value = limit ?? fallback ?? 0
     return parseRateLimit(value)
@@ -67,7 +94,7 @@ export const parseCurrentPlan = (data: CurrentPlanInfoBackend) => {
   return {
     type: planType,
     usage: {
-      vectorSpace: data.vector_space.size,
+      vectorSpace: 0,
       buildApps: data.apps?.size || 0,
       teamMembers: data.members.size,
       annotatedResponse: data.annotation_quota_limit.size,
@@ -76,7 +103,7 @@ export const parseCurrentPlan = (data: CurrentPlanInfoBackend) => {
       triggerEvents: getQuotaUsage(data.trigger_event),
     },
     total: {
-      vectorSpace: parseLimit(data.vector_space.limit),
+      vectorSpace: vectorSpaceLimit,
       buildApps: parseLimit(data.apps?.limit) || 0,
       teamMembers: parseLimit(data.members.limit),
       annotatedResponse: parseLimit(data.annotation_quota_limit.limit),

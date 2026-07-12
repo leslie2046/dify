@@ -1,4 +1,4 @@
-import { escape } from 'lodash-es'
+import { escape } from 'es-toolkit/string'
 
 export const sleep = (ms: number) => {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -21,14 +21,6 @@ export const getTextWidthWithCanvas = (text: string, font?: string) => {
     return Number(ctx.measureText(text).width.toFixed(2))
   }
   return 0
-}
-
-const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_'
-
-export function randomString(length: number) {
-  let result = ''
-  for (let i = length; i > 0; --i) result += chars[Math.floor(Math.random() * chars.length)]
-  return result
 }
 
 export const getPurifyHref = (href: string) => {
@@ -89,13 +81,4 @@ export const canFindTool = (providerId: string, oldToolId?: string) => {
   return providerId === oldToolId
     || providerId === `langgenius/${oldToolId}/${oldToolId}`
     || providerId === `langgenius/${oldToolId}_tool/${oldToolId}`
-}
-
-export const removeSpecificQueryParam = (key: string | string[]) => {
-  const url = new URL(window.location.href)
-  if (Array.isArray(key))
-    key.forEach(k => url.searchParams.delete(k))
-  else
-    url.searchParams.delete(key)
-  window.history.replaceState(null, '', url.toString())
 }

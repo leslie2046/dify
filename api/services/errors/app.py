@@ -18,12 +18,6 @@ class WorkflowIdFormatError(Exception):
     pass
 
 
-class InvokeRateLimitError(Exception):
-    """Raised when rate limit is exceeded for workflow invocations."""
-
-    pass
-
-
 class QuotaExceededError(ValueError):
     """Raised when billing quota is exceeded for a feature."""
 
