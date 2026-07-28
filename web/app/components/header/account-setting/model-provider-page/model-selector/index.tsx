@@ -11,6 +11,15 @@ import ModelSelectorTrigger from './model-selector-trigger'
 import Popup from './popup'
 import { getModelSelectorValueLabel, isSameModelSelectorValue } from './types'
 
+const getModelProviderPluginId = (provider: string) => {
+  const [organization, pluginName] = provider.split('/').filter(Boolean)
+
+  if (organization && pluginName)
+    return `${organization}/${pluginName}`
+
+  return provider ? `langgenius/${provider}` : ''
+}
+
 type ModelSelectorProps = {
   defaultModel?: DefaultModel
   modelList: Model[]
@@ -22,6 +31,11 @@ type ModelSelectorProps = {
   scopeFeatures?: ModelFeatureEnum[]
   deprecatedClassName?: string
   showDeprecatedWarnIcon?: boolean
+  hideProviderSettingsFooter?: boolean
+  onConfigureEmptyState?: () => void
+  onOpenMarketplace?: () => void
+  providerSettingsSource?: 'agent'
+  showModelMeta?: boolean
 }
 function ModelSelector({
   defaultModel,
@@ -34,6 +48,11 @@ function ModelSelector({
   scopeFeatures = [],
   deprecatedClassName,
   showDeprecatedWarnIcon = true,
+  hideProviderSettingsFooter,
+  onConfigureEmptyState,
+  onOpenMarketplace,
+  providerSettingsSource,
+  showModelMeta,
 }: ModelSelectorProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -68,8 +87,13 @@ function ModelSelector({
     setOpen(false)
     setInputValue('')
 
-    if (onSelect)
-      onSelect({ provider, model: model.model })
+    if (onSelect) {
+      onSelect({
+        provider,
+        model: model.model,
+        plugin_id: getModelProviderPluginId(provider),
+      })
+    }
   }, [onSelect])
 
   const handleValueChange = useCallback((value: ModelSelectorValue | null) => {
@@ -97,6 +121,11 @@ function ModelSelector({
     setInputValue('')
     onHide?.()
   }, [onHide])
+  const handleConfigureEmptyState = useCallback(() => {
+    setOpen(false)
+    setInputValue('')
+    onConfigureEmptyState?.()
+  }, [onConfigureEmptyState])
 
   return (
     <Combobox<ModelSelectorValue>
@@ -113,7 +142,7 @@ function ModelSelector({
       <ComboboxTrigger
         aria-label={t('detailPanel.configureModel', { ns: 'plugin' })}
         icon={false}
-        className="block h-auto w-full border-0 bg-transparent p-0 text-left hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 data-open:bg-transparent"
+        className="block h-auto w-full border-0 bg-transparent p-0 text-left hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 data-popup-open:bg-transparent"
         disabled={readonly}
       >
         <ModelSelectorTrigger
@@ -125,6 +154,7 @@ function ModelSelector({
           className={triggerClassName}
           deprecatedClassName={deprecatedClassName}
           showDeprecatedWarnIcon={showDeprecatedWarnIcon}
+          showModelMeta={showModelMeta}
         />
       </ComboboxTrigger>
       <ComboboxContent
@@ -137,6 +167,10 @@ function ModelSelector({
           inputValue={inputValue}
           modelList={modelList}
           scopeFeatures={scopeFeatures}
+          hideProviderSettingsFooter={hideProviderSettingsFooter}
+          providerSettingsSource={providerSettingsSource}
+          onConfigureEmptyState={onConfigureEmptyState ? handleConfigureEmptyState : undefined}
+          onOpenMarketplace={onOpenMarketplace}
           onInputValueChange={setInputValue}
           onHide={handleHide}
         />

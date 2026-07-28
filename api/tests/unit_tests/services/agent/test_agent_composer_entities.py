@@ -1,9 +1,9 @@
 import pytest
 
-from models.agent_config_entities import AgentKnowledgeQueryMode, DeclaredOutputType
+from models.agent_config_entities import AgentKnowledgeQueryMode, AgentSoulModelConfig, DeclaredOutputType
 from services.agent.composer_service import AgentComposerService
 from services.agent.composer_validator import ComposerConfigValidator
-from services.agent.errors import AgentSoulLockedError, PlaintextSecretNotAllowedError
+from services.agent.errors import AgentSoulLockedError, InvalidComposerConfigError, PlaintextSecretNotAllowedError
 from services.entities.agent_entities import (
     AgentSoulConfig,
     ComposerSavePayload,
@@ -51,6 +51,37 @@ def test_locked_workflow_soul_rejects_soul_changes():
         ComposerConfigValidator.validate_save_payload(payload)
 
 
+def test_locked_workflow_node_job_only_allows_inline_soul_payload():
+    payload = ComposerSavePayload.model_validate(
+        {
+            "variant": ComposerVariant.WORKFLOW,
+            "save_strategy": ComposerSaveStrategy.NODE_JOB_ONLY,
+            "soul_lock": {"locked": True},
+            "agent_soul": {"prompt": {"system_prompt": "changed"}},
+        }
+    )
+
+    ComposerConfigValidator.validate_save_payload(payload)
+
+
+def test_draft_save_payload_skips_publish_only_agent_soul_validation():
+    payload = ComposerSavePayload.model_validate(
+        {
+            "variant": ComposerVariant.AGENT_APP,
+            "save_strategy": ComposerSaveStrategy.SAVE_TO_CURRENT_VERSION,
+            "agent_soul": {
+                "prompt": {"system_prompt": "no human reference yet"},
+                "human": {"contacts": [{"id": "human-1", "name": "Reviewer"}]},
+                "env": {"variables": [{"name": "bad-name"}]},
+            },
+        }
+    )
+
+    ComposerConfigValidator.validate_draft_save_payload(payload)
+    with pytest.raises(InvalidComposerConfigError):
+        ComposerConfigValidator.validate_publish_payload(payload)
+
+
 def test_agent_app_soul_allows_app_features_and_variables():
     payload = ComposerSavePayload.model_validate(
         {
@@ -74,6 +105,28 @@ def test_agent_app_soul_allows_app_features_and_variables():
     assert payload.agent_soul.app_variables[0].name == "company_name"
 
 
+def test_composer_save_payload_accepts_new_roster_metadata():
+    payload = ComposerSavePayload.model_validate(
+        {
+            "variant": ComposerVariant.WORKFLOW,
+            "save_strategy": ComposerSaveStrategy.SAVE_TO_ROSTER,
+            "new_agent_name": "Research Agent",
+            "description": "Finds relevant sources.",
+            "role": "Research Assistant",
+            "icon_type": "emoji",
+            "icon": "search",
+            "icon_background": "#E0F2FE",
+        }
+    )
+
+    assert payload.new_agent_name == "Research Agent"
+    assert payload.description == "Finds relevant sources."
+    assert payload.role == "Research Assistant"
+    assert payload.icon_type == "emoji"
+    assert payload.icon == "search"
+    assert payload.icon_background == "#E0F2FE"
+
+
 def test_knowledge_query_mode_uses_stable_backend_enums():
     config = AgentSoulConfig.model_validate(
         {
@@ -88,7 +141,25 @@ def test_knowledge_query_mode_uses_stable_backend_enums():
     assert config.knowledge.query_mode == AgentKnowledgeQueryMode.GENERATED_QUERY
 
 
+def test_agent_soul_model_config_is_first_class_without_credentials():
+    config = AgentSoulConfig(
+        model=AgentSoulModelConfig(
+            plugin_id="langgenius/openai",
+            model_provider="openai",
+            model="gpt-test",
+            credential_ref={"type": "provider", "id": "credential-1"},
+            model_settings={"temperature": 0},
+        )
+    )
+
+    dumped = config.model_dump(mode="json")
+    assert dumped["model"]["plugin_id"] == "langgenius/openai"
+    assert dumped["model"]["credential_ref"] == {"type": "provider", "id": "credential-1", "provider": None}
+
+
 def test_declared_outputs_support_file_check_and_failure_strategy():
+    """Stage 4 §4.3 + §4.4: file output may carry a single ``check`` plus a
+    full LLM-node-parity ``failure_strategy``."""
     node_job = WorkflowNodeJobConfig.model_validate(
         {
             "declared_outputs": [
@@ -96,17 +167,14 @@ def test_declared_outputs_support_file_check_and_failure_strategy():
                     "name": "analysis_report",
                     "type": "file",
                     "file": {"extensions": [".pdf"], "mime_types": ["application/pdf"]},
-                    "checks": [
-                        {
-                            "type": "benchmark_file",
-                            "prompt": "Report must include risk summary.",
-                            "benchmark_file_ref": {"upload_file_id": "file-1"},
-                        }
-                    ],
+                    "check": {
+                        "enabled": True,
+                        "prompt": "Report must include risk summary.",
+                        "benchmark_file_ref": {"upload_file_id": "file-1"},
+                    },
                     "failure_strategy": {
-                        "on_type_check_failed": "fail_node",
-                        "on_output_check_failed": "retry",
-                        "max_retries": 1,
+                        "retry": {"enabled": True, "max_retries": 1, "retry_interval_ms": 500},
+                        "on_failure": "fail_branch",
                     },
                 }
             ]
@@ -117,9 +185,12 @@ def test_declared_outputs_support_file_check_and_failure_strategy():
     assert output.type == DeclaredOutputType.FILE
     assert output.file is not None
     assert output.file.extensions == [".pdf"]
-    assert output.checks[0].type == "benchmark_file"
-    assert output.failure_strategy is not None
-    assert output.failure_strategy.max_retries == 1
+    assert output.check is not None
+    assert output.check.enabled is True
+    assert output.check.prompt == "Report must include risk summary."
+    assert output.failure_strategy.retry.enabled is True
+    assert output.failure_strategy.retry.max_retries == 1
+    assert output.failure_strategy.on_failure.value == "fail_branch"
 
 
 def test_plaintext_secrets_are_rejected():
