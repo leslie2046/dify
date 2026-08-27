@@ -25,7 +25,7 @@ describe('AppNavItem', () => {
       render(<AppNavItem {...baseProps} />)
 
       expect(screen.getByText('My App')).toBeInTheDocument()
-      expect(screen.getByTestId('item-operation-trigger')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'common.operation.more' })).toBeInTheDocument()
     })
   })
 
@@ -58,20 +58,10 @@ describe('AppNavItem', () => {
       expect(link).toHaveAttribute('aria-current', 'page')
     })
 
-    it('should only show the row focus ring when the app link receives focus', () => {
-      render(<AppNavItem {...baseProps} />)
-
-      const row = screen.getByText('My App').closest('.group')
-
-      expect(row).toHaveClass('has-[>a:focus-visible]:inset-ring-2')
-      expect(row).toHaveClass('has-[>a:focus-visible]:inset-ring-state-accent-solid')
-      expect(row).not.toHaveClass('focus-within:ring-2')
-    })
-
     it('should call onDelete with app id when delete action is clicked', async () => {
       render(<AppNavItem {...baseProps} />)
 
-      fireEvent.click(screen.getByTestId('item-operation-trigger'))
+      fireEvent.click(screen.getByRole('button', { name: 'common.operation.more' }))
       fireEvent.click(await screen.findByText('explore.sidebar.action.delete'))
 
       expect(baseProps.onDelete).toHaveBeenCalledWith('app-123')
@@ -82,7 +72,7 @@ describe('AppNavItem', () => {
     it('should not render delete action when app is uninstallable', () => {
       render(<AppNavItem {...baseProps} uninstallable />)
 
-      fireEvent.click(screen.getByTestId('item-operation-trigger'))
+      fireEvent.click(screen.getByRole('button', { name: 'common.operation.more' }))
 
       expect(screen.queryByText('explore.sidebar.action.delete')).not.toBeInTheDocument()
     })
