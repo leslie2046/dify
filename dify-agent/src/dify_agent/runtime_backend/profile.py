@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 from typing import ClassVar, Literal, Self
 from urllib.parse import urlparse
 
@@ -19,6 +20,9 @@ from dify_agent.runtime_backend.local import LocalExecutionBindingBackend, Local
 from dify_agent.runtime_backend.protocols import RuntimeBackendProfile
 
 DEFAULT_E2B_TEMPLATE = "difys-default-team/dify-agent-local-sandbox"
+DEFAULT_LOCAL_MATERIALIZED_HOME_ROOT = "/home/dify"
+DEFAULT_LOCAL_WORKSPACE_ROOT = "/workspace"
+DEFAULT_LOCAL_HOME_SNAPSHOT_ROOT = "/home/dify/.snapshots"
 
 
 class RuntimeBackendSettings(BaseSettings):
@@ -40,11 +44,15 @@ class RuntimeBackendSettings(BaseSettings):
             "DIFY_AGENT_SHELLCTL_AUTH_TOKEN",
         ),
     )
+    local_sandbox_materialized_home_root: str = DEFAULT_LOCAL_MATERIALIZED_HOME_ROOT
+    local_sandbox_workspace_root: str = DEFAULT_LOCAL_WORKSPACE_ROOT
+    local_sandbox_home_snapshot_root: str = DEFAULT_LOCAL_HOME_SNAPSHOT_ROOT
 
     enterprise_sandbox_gateway_endpoint: str | None = None
     enterprise_sandbox_gateway_auth_token: str | None = None
     enterprise_sandbox_gateway_timeout: float = Field(default=30.0, gt=0)
     enterprise_sandbox_proxy_timeout: float = Field(default=60.0, gt=0)
+    enterprise_sandbox_snapshot_timeout: float = Field(default=35.0, gt=0)
 
     e2b_api_key: str | None = None
     e2b_template: str = DEFAULT_E2B_TEMPLATE
@@ -53,7 +61,6 @@ class RuntimeBackendSettings(BaseSettings):
         ge=1,
         le=E2B_MAX_ACTIVE_TIMEOUT_SECONDS,
     )
-    e2b_shellctl_auth_token: str = ""
     e2b_shellctl_port: int = Field(default=5004, ge=1, le=65535)
 
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
@@ -70,6 +77,18 @@ class RuntimeBackendSettings(BaseSettings):
                 if not self.local_sandbox_endpoint or not self.local_sandbox_endpoint.strip():
                     raise ValueError("local_sandbox_endpoint is required for the local runtime backend")
                 _validate_http_url(self.local_sandbox_endpoint, field_name="local_sandbox_endpoint")
+                _validate_absolute_posix_path(
+                    self.local_sandbox_materialized_home_root,
+                    field_name="local_sandbox_materialized_home_root",
+                )
+                _validate_absolute_posix_path(
+                    self.local_sandbox_workspace_root,
+                    field_name="local_sandbox_workspace_root",
+                )
+                _validate_absolute_posix_path(
+                    self.local_sandbox_home_snapshot_root,
+                    field_name="local_sandbox_home_snapshot_root",
+                )
             case "enterprise":
                 endpoint = self.enterprise_sandbox_gateway_endpoint
                 if not endpoint or not endpoint.strip():
@@ -92,8 +111,18 @@ def create_runtime_backend_profile(settings: RuntimeBackendSettings) -> RuntimeB
             endpoint = settings.local_sandbox_endpoint or ""
             token = settings.local_sandbox_auth_token or ""
             return RuntimeBackendProfile(
-                home_snapshots=LocalHomeSnapshotBackend(endpoint=endpoint, auth_token=token),
-                execution_bindings=LocalExecutionBindingBackend(endpoint=endpoint, auth_token=token),
+                home_snapshots=LocalHomeSnapshotBackend(
+                    endpoint=endpoint,
+                    auth_token=token,
+                    snapshot_root=settings.local_sandbox_home_snapshot_root,
+                ),
+                execution_bindings=LocalExecutionBindingBackend(
+                    endpoint=endpoint,
+                    auth_token=token,
+                    materialized_home_root=settings.local_sandbox_materialized_home_root,
+                    workspace_root=settings.local_sandbox_workspace_root,
+                    snapshot_root=settings.local_sandbox_home_snapshot_root,
+                ),
             )
         case "enterprise":
             endpoint = settings.enterprise_sandbox_gateway_endpoint or ""
@@ -102,13 +131,14 @@ def create_runtime_backend_profile(settings: RuntimeBackendSettings) -> RuntimeB
                 home_snapshots=EnterpriseHomeSnapshotBackend(
                     gateway_endpoint=endpoint,
                     auth_token=token,
-                    gateway_timeout=settings.enterprise_sandbox_gateway_timeout,
+                    snapshot_timeout=settings.enterprise_sandbox_snapshot_timeout,
                 ),
                 execution_bindings=EnterpriseExecutionBindingBackend(
                     gateway_endpoint=endpoint,
                     auth_token=token,
                     gateway_timeout=settings.enterprise_sandbox_gateway_timeout,
                     proxy_timeout=settings.enterprise_sandbox_proxy_timeout,
+                    snapshot_timeout=settings.enterprise_sandbox_snapshot_timeout,
                 ),
             )
         case "e2b":
@@ -116,13 +146,11 @@ def create_runtime_backend_profile(settings: RuntimeBackendSettings) -> RuntimeB
             return RuntimeBackendProfile(
                 home_snapshots=E2BHomeSnapshotBackend(
                     control_plane=control_plane,
-                    template=settings.e2b_template,
-                    active_timeout_seconds=settings.e2b_active_timeout_seconds,
                 ),
                 execution_bindings=E2BExecutionBindingBackend(
                     control_plane=control_plane,
+                    template=settings.e2b_template,
                     active_timeout_seconds=settings.e2b_active_timeout_seconds,
-                    shellctl_auth_token=settings.e2b_shellctl_auth_token,
                     shellctl_port=settings.e2b_shellctl_port,
                 ),
             )
@@ -134,4 +162,16 @@ def _validate_http_url(value: str, *, field_name: str) -> None:
         raise ValueError(f"{field_name} must be a valid http(s) URL")
 
 
-__all__ = ["DEFAULT_E2B_TEMPLATE", "RuntimeBackendSettings", "create_runtime_backend_profile"]
+def _validate_absolute_posix_path(value: str, *, field_name: str) -> None:
+    if not value.strip() or not posixpath.isabs(value):
+        raise ValueError(f"{field_name} must be an absolute POSIX path")
+
+
+__all__ = [
+    "DEFAULT_E2B_TEMPLATE",
+    "DEFAULT_LOCAL_HOME_SNAPSHOT_ROOT",
+    "DEFAULT_LOCAL_MATERIALIZED_HOME_ROOT",
+    "DEFAULT_LOCAL_WORKSPACE_ROOT",
+    "RuntimeBackendSettings",
+    "create_runtime_backend_profile",
+]

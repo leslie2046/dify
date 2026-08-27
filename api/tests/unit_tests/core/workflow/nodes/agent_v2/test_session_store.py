@@ -155,7 +155,8 @@ def test_load_existing_scope_rejects_unavailable_persisted_binding(monkeypatch: 
         )
 
 
-def test_load_or_create_persists_binding_on_node_execution(monkeypatch) -> None:
+@pytest.mark.parametrize("home_snapshot_id", ["home-1", None])
+def test_load_or_create_persists_binding_on_node_execution(monkeypatch, home_snapshot_id: str | None) -> None:
     execution = WorkflowNodeExecutionModel(
         agent_workspace_binding_id=None,
         process_data=json.dumps({"existing": "value"}),
@@ -171,7 +172,7 @@ def test_load_or_create_persists_binding_on_node_execution(monkeypatch) -> None:
     monkeypatch.setattr(store, "_load_execution", MagicMock(return_value=execution))
     monkeypatch.setattr(AgentWorkspaceService, "create_binding", create)
 
-    stored = store.load_or_create_node_execution_session(_scope(), home_snapshot_id="home-1")
+    stored = store.load_or_create_node_execution_session(_scope(), home_snapshot_id=home_snapshot_id)
 
     assert stored.binding_id == "binding-1"
     assert stored.workspace_id == "workspace-1"
@@ -183,6 +184,7 @@ def test_load_or_create_persists_binding_on_node_execution(monkeypatch) -> None:
     }
     assert "agent_workspace_binding_id" not in execution.process_data_dict
     assert create.call_args.kwargs["session"] is session
+    assert create.call_args.kwargs["base_home_snapshot_id"] == home_snapshot_id
     session.commit.assert_called_once_with()
 
     get_active = MagicMock(return_value=_binding())
@@ -197,9 +199,13 @@ def test_load_or_create_persists_binding_on_node_execution(monkeypatch) -> None:
         session=session,
     )
 
-    assert resolved.id == "binding-1"
+    assert resolved.backend_binding_ref == "backend-binding-1"
+    assert resolved.agent_id == "agent-1"
+    assert resolved.agent_config_version_id == "config-1"
+    assert resolved.agent_config_version_kind == "snapshot"
     owner_scope = get_active.call_args.kwargs["expected_owner_scope"]
     assert owner_scope.owner_scope_key == "node-1:workflow-binding-1"
+    session.rollback.assert_called_once_with()
 
 
 def test_load_existing_pointer_rejects_missing_workflow_identity(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -293,7 +299,7 @@ def test_load_existing_pointer_rejects_conflicting_workflow_identity(monkeypatch
     session.commit.assert_not_called()
 
 
-def test_load_or_create_fails_before_binding_create_when_caller_row_is_missing(monkeypatch) -> None:
+def test_load_or_create_fails_before_binding_create_when_caller_row_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     context = MagicMock()
     session = context.__enter__.return_value
     create = MagicMock()
@@ -342,7 +348,7 @@ def test_load_existing_scope_waits_for_caller_row_to_become_visible(monkeypatch:
     assert sleep.call_count == 2
 
 
-def test_save_snapshot_targets_binding(monkeypatch) -> None:
+def test_save_snapshot_targets_binding(monkeypatch: pytest.MonkeyPatch) -> None:
     save = MagicMock()
     monkeypatch.setattr(AgentWorkspaceService, "save_binding_session_snapshot", save)
     snapshot = CompositorSessionSnapshot(layers=[])
@@ -406,7 +412,7 @@ def test_retire_workflow_run_transitions_active_workspace(
     assert workspace_ids == [workspace.id]
 
 
-def test_retire_workflow_run_returns_existing_retired_workspace(monkeypatch) -> None:
+def test_retire_workflow_run_returns_existing_retired_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
     workspace = _workspace_row(status=AgentWorkingResourceStatus.RETIRED)
     context = MagicMock()
     session = context.__enter__.return_value

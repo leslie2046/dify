@@ -6,7 +6,6 @@ from dify_agent.protocol.home_snapshot import (
     CreateHomeSnapshotFromBindingRequest,
     DeleteHomeSnapshotRequest,
     HomeSnapshotResponse,
-    InitializeHomeSnapshotRequest,
 )
 from dify_agent.runtime_backend import (
     BindingAcquireError,
@@ -16,7 +15,7 @@ from dify_agent.runtime_backend import (
     HomeSnapshotCreateError,
     HomeSnapshotCreateSpec,
     HomeSnapshotNotFoundError,
-    InitializeHomeSnapshotSpec,
+    HomeSnapshotTooLargeError,
 )
 from dify_agent.runtime_backend.leases import open_runtime_lease
 
@@ -38,19 +37,6 @@ class HomeSnapshotService:
     home_snapshots: HomeSnapshotBackend
     execution_bindings: ExecutionBindingBackend
 
-    async def initialize(self, request: InitializeHomeSnapshotRequest) -> HomeSnapshotResponse:
-        try:
-            snapshot_ref = await self.home_snapshots.initialize(
-                InitializeHomeSnapshotSpec(
-                    tenant_id=request.tenant_id,
-                    agent_id=request.agent_id,
-                    home_snapshot_id=request.home_snapshot_id,
-                )
-            )
-        except HomeSnapshotCreateError as exc:
-            raise HomeSnapshotServiceError("home_snapshot_create_failed", str(exc), status_code=502) from exc
-        return HomeSnapshotResponse(snapshot_ref=snapshot_ref)
-
     async def create_from_binding(
         self,
         request: CreateHomeSnapshotFromBindingRequest,
@@ -67,6 +53,8 @@ class HomeSnapshotService:
                 )
         except BindingLostError as exc:
             raise HomeSnapshotServiceError("binding_lost", str(exc), status_code=404) from exc
+        except HomeSnapshotTooLargeError as exc:
+            raise HomeSnapshotServiceError("home_snapshot_too_large", str(exc), status_code=413) from exc
         except (BindingAcquireError, HomeSnapshotCreateError) as exc:
             raise HomeSnapshotServiceError("home_snapshot_create_failed", str(exc), status_code=502) from exc
         return HomeSnapshotResponse(snapshot_ref=snapshot_ref)

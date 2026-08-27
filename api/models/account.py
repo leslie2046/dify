@@ -88,13 +88,18 @@ class AccountStatus(enum.StrEnum):
 
 class Account(UserMixin, TypeBase):
     __tablename__ = "accounts"
-    __table_args__ = (sa.PrimaryKeyConstraint("id", name="account_pkey"), sa.Index("account_email_idx", "email"))
+    __table_args__ = (
+        sa.PrimaryKeyConstraint("id", name="account_pkey"),
+        sa.Index("account_email_idx", "email"),
+        sa.Index("account_normalized_email_idx", "normalized_email"),
+    )
 
     id: Mapped[str] = mapped_column(
         StringUUID, insert_default=lambda: str(uuid4()), default_factory=lambda: str(uuid4()), init=False
     )
     name: Mapped[str] = mapped_column(String(255))
     email: Mapped[str] = mapped_column(String(255))
+    normalized_email: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     password: Mapped[str | None] = mapped_column(String(255), default=None)
     password_salt: Mapped[str | None] = mapped_column(String(255), default=None)
     avatar: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
@@ -165,11 +170,8 @@ class Account(UserMixin, TypeBase):
 
     def set_tenant_id_with_session(self, tenant_id: str, *, session: Session) -> None:
         """Set the current tenant by id using the caller-owned session."""
-        query = (
-            select(Tenant, TenantAccountJoin)
-            .where(Tenant.id == tenant_id)
-            .where(TenantAccountJoin.tenant_id == Tenant.id)
-            .where(TenantAccountJoin.account_id == self.id)
+        query = select(Tenant, TenantAccountJoin).where(
+            Tenant.id == tenant_id, TenantAccountJoin.tenant_id == Tenant.id, TenantAccountJoin.account_id == self.id
         )
         tenant_account_join = session.execute(query).first()
         if not tenant_account_join:
