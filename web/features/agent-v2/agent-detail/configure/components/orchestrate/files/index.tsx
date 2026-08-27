@@ -239,7 +239,7 @@ function AgentFileItem({
   return (
     <li
       data-selected={selected || undefined}
-      className="group/file-row relative flex h-6 min-w-0 items-center rounded-md focus-within:bg-state-base-hover hover:bg-state-base-hover data-[selected]:bg-state-base-active"
+      className="group/file-row relative flex h-6 min-w-0 items-center rounded-md focus-within:bg-state-base-hover hover:bg-state-base-hover data-selected:bg-state-base-active"
     >
       <Dialog open={isPreviewOpen} onOpenChange={handlePreviewOpenChange}>
         <DialogTrigger
@@ -375,6 +375,7 @@ export function AgentFiles() {
   const { t } = useTranslation('agentV2')
   const filesTip = t(($) => $['agentDetail.configure.files.tip'])
   const filesTreeId = 'agent-configure-files-tree'
+  const readOnly = useAgentOrchestrateReadOnly()
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const promptAddCallbackRef = useRef<AgentOrchestrateAddActionOptions['onAdded']>(undefined)
   const apiContext = useAgentConfigApiContext()
@@ -477,10 +478,12 @@ export function AgentFiles() {
         rootClassName="border-b border-divider-subtle pt-4"
         panelContentClassName="pb-4"
         actions={
-          <ConfigureSectionAddButton
-            ariaLabel={t(($) => $['agentDetail.configure.files.add'])}
-            onClick={() => handleOpenUpload()}
-          />
+          !readOnly ? (
+            <ConfigureSectionAddButton
+              ariaLabel={t(($) => $['agentDetail.configure.files.add'])}
+              onClick={() => handleOpenUpload()}
+            />
+          ) : undefined
         }
       >
         {visibleFiles.length === 0 ? (

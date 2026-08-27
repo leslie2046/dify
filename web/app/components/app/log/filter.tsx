@@ -8,7 +8,7 @@ import quarterOfYear from 'dayjs/plugin/quarterOfYear'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import Chip from '@/app/components/base/chip'
-import Input from '@/app/components/base/input'
+import { SearchInput } from '@/app/components/base/search-input'
 import Sort from '@/app/components/base/sort'
 import { useAnnotationsCount } from '@/service/use-log'
 import {
@@ -62,7 +62,7 @@ const Filter: FC<IFilterProps> = ({
   return (
     <div className="mb-2 flex flex-row flex-wrap items-center gap-2">
       <Chip
-        className="min-w-[150px]"
+        className="min-w-37.5"
         panelClassName="w-[270px]"
         leftIcon={<RiCalendarLine className="size-4 text-text-secondary" />}
         value={queryParams.period}
@@ -81,7 +81,7 @@ const Filter: FC<IFilterProps> = ({
         }))}
       />
       <Chip
-        className="min-w-[150px]"
+        className="min-w-37.5"
         panelClassName="w-[270px]"
         showLeftIcon={false}
         value={queryParams.annotation_status || 'all'}
@@ -101,16 +101,13 @@ const Filter: FC<IFilterProps> = ({
           },
         ]}
       />
-      <Input
-        wrapperClassName="w-[200px]"
-        showLeftIcon
-        showClearIcon
-        value={queryParams.keyword}
+      <SearchInput
+        className="w-50"
+        value={queryParams.keyword ?? ''}
         placeholder={t(($) => $['operation.search'], { ns: 'common' })!}
-        onChange={(e) => {
-          setQueryParams({ ...queryParams, keyword: e.target.value })
+        onValueChange={(value) => {
+          setQueryParams({ ...queryParams, keyword: value })
         }}
-        onClear={() => setQueryParams({ ...queryParams, keyword: '' })}
       />
       {isChatMode && (
         <>

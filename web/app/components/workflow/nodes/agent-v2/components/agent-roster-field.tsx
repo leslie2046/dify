@@ -158,7 +158,7 @@ function AgentRosterDrawer({
                   isSetup
                     ? 'h-16 px-4 py-3'
                     : showDetailActions
-                      ? 'h-[108px] gap-3 py-3 pr-4 pl-3'
+                      ? 'h-27 gap-3 py-3 pr-4 pl-3'
                       : 'py-3 pr-4 pl-3',
                 )}
               >
@@ -224,7 +224,7 @@ function AgentRosterDrawer({
                           <DropdownMenuContent
                             placement="bottom-end"
                             sideOffset={4}
-                            popupClassName="min-w-44 w-max"
+                            className="w-max min-w-44"
                           >
                             <DropdownMenuItem
                               className="gap-2 whitespace-nowrap"
@@ -257,7 +257,7 @@ function AgentRosterDrawer({
                     <Button
                       variant="secondary"
                       size="medium"
-                      className="min-w-0 flex-1 gap-1.5 px-3"
+                      className="min-w-0 flex-1 px-3"
                       loading={isCopyPending}
                       onClick={onMakeCopy}
                     >
@@ -437,7 +437,7 @@ export function AgentRosterField({
           <PopoverContent
             placement="bottom-end"
             sideOffset={4}
-            popupClassName="border-none bg-transparent p-0 shadow-none backdrop-blur-none"
+            className="border-none bg-transparent p-0 shadow-none backdrop-blur-none"
           >
             <PopoverTitle className="sr-only">
               {t(($) => $['roster.nodeSelector.dialogLabel'], { ns: 'agentV2' })}

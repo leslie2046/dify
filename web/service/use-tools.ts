@@ -11,15 +11,21 @@ import type { AppIconType } from '@/types/app'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CollectionType } from '@/app/components/tools/types'
 import { del, get, post, put } from './base'
+import { consoleClient } from './client'
 import { useInvalid } from './use-base'
 
 const NAME_SPACE = 'tools'
 
 const useAllToolProvidersKey = [NAME_SPACE, 'allToolProviders']
-export const useAllToolProviders = (enabled = true) => {
+type ToolProviderListType = 'builtin' | 'model' | 'api' | 'workflow' | 'mcp'
+
+export const useAllToolProviders = (enabled = true, type?: ToolProviderListType) => {
   return useQuery<Collection[]>({
-    queryKey: useAllToolProvidersKey,
-    queryFn: () => get<Collection[]>('/workspaces/current/tool-providers'),
+    queryKey: type ? [...useAllToolProvidersKey, type] : useAllToolProvidersKey,
+    queryFn: () =>
+      type
+        ? get<Collection[]>('/workspaces/current/tool-providers', { params: { type } })
+        : get<Collection[]>('/workspaces/current/tool-providers'),
     enabled,
   })
 }
@@ -250,7 +256,11 @@ export const useRefreshMCPServerCode = () => {
   return useMutation({
     mutationKey: [NAME_SPACE, 'refresh-mcp-server-code'],
     mutationFn: (appID: string) => {
-      return get<MCPServerDetail>(`apps/${appID}/server/refresh`)
+      return consoleClient.apps.byAppId.server.refresh.post({
+        params: {
+          app_id: appID,
+        },
+      })
     },
   })
 }

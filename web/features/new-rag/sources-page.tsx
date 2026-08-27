@@ -123,7 +123,7 @@ function SourceActions({
             )}
           />
         </DropdownMenuTrigger>
-        <DropdownMenuContent placement="bottom-end" sideOffset={4} popupClassName="w-48">
+        <DropdownMenuContent placement="bottom-end" sideOffset={4} className="w-48">
           {canSync && (
             <DropdownMenuItem onClick={() => void onSync()} className="gap-2 px-3">
               <span aria-hidden className="i-ri-refresh-line size-4" />
@@ -325,7 +325,7 @@ function SourceRow({
           <span
             aria-hidden
             className={cn(
-              'size-[18px] shrink-0 text-text-tertiary',
+              'size-4.5 shrink-0 text-text-tertiary',
               source.type === 'web' ? 'i-ri-global-line' : 'i-ri-links-line',
             )}
           />
@@ -619,7 +619,7 @@ export function SourcesPage({ knowledgeSpaceId }: { knowledgeSpaceId: string }) 
             )}
           </div>
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full table-fixed border-collapse text-left lg:min-w-[900px] lg:table-auto">
+            <table className="w-full table-fixed border-collapse text-left lg:min-w-225 lg:table-auto">
               <thead className="system-2xs-medium text-text-tertiary uppercase">
                 <tr>
                   <th className="w-7 pr-3 pb-2">
@@ -654,7 +654,7 @@ export function SourcesPage({ knowledgeSpaceId }: { knowledgeSpaceId: string }) 
                       onClick={() =>
                         setSort((current) => (current === 'name-asc' ? 'name-desc' : 'name-asc'))
                       }
-                      className="inline-flex items-center gap-1 rounded outline-hidden focus-visible:ring-2 focus-visible:ring-state-accent-solid"
+                      className="inline-flex items-center gap-1 rounded focus-visible:ring-2 focus-visible:ring-state-accent-solid focus-visible:outline-hidden"
                     >
                       {t(($) => $['newKnowledge.sourceColumn'])}
                       <span
