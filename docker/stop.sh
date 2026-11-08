@@ -1,2 +1,2 @@
 #!/bin/bash
-docker-compose -p dify down
+docker-compose -p dify stop 
