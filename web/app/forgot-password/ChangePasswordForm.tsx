@@ -10,14 +10,18 @@ import {
   FieldValidity,
 } from '@langgenius/dify-ui/field'
 import { Form } from '@langgenius/dify-ui/form'
-import { Input } from '@langgenius/dify-ui/input'
+import {
+  PasswordField,
+  PasswordFieldInput,
+  PasswordFieldToggle,
+} from '@langgenius/dify-ui/password-field'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Loading from '@/app/components/base/loading'
+import { LoadingPlaceholder } from '@/app/components/base/loading-placeholder'
 import { validPassword } from '@/config'
 import useDocumentTitle from '@/hooks/use-document-title'
 import { useSearchParams } from '@/next/navigation'
-import { changePasswordWithToken } from '@/service/common'
+import { consoleClient } from '@/service/console'
 import { useVerifyForgotPasswordToken } from '@/service/use-common'
 import { basePath } from '@/utils/var'
 
@@ -27,7 +31,7 @@ type PasswordFormValues = {
 }
 
 const ChangePasswordForm = () => {
-  const { t } = useTranslation()
+  const { t } = useTranslation(['common', 'login', 'accountSettings'])
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
   const isTokenMissing = !token
@@ -56,8 +60,7 @@ const ChangePasswordForm = () => {
 
       setIsSubmitting(true)
       try {
-        await changePasswordWithToken({
-          url: '/forgot-password/resets',
+        await consoleClient.forgotPassword.resets.post({
           body: {
             token: resetToken,
             new_password: formValues.password,
@@ -78,7 +81,7 @@ const ChangePasswordForm = () => {
     <div
       className={cn('flex w-full grow flex-col items-center justify-center', 'px-6', 'md:px-27')}
     >
-      {isVerifyingToken && <Loading />}
+      {isVerifyingToken && <LoadingPlaceholder />}
       {isTokenInvalid && (
         <div className="flex flex-col md:w-100">
           <div className="mx-auto w-full">
@@ -130,18 +133,21 @@ const ChangePasswordForm = () => {
                 }}
                 className="mb-5"
               >
-                <FieldLabel>{t(($) => $['account.newPassword'], { ns: 'common' })}</FieldLabel>
-                <Input
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  spellCheck={false}
-                  onValueChange={() => {
-                    if (confirmPasswordRef.current?.value)
-                      formActionsRef.current?.validate('confirmPassword')
-                  }}
-                  placeholder={t(($) => $.passwordPlaceholder, { ns: 'login' }) || ''}
-                />
+                <FieldLabel>
+                  {t(($) => $['account.newPassword'], { ns: 'accountSettings' })}
+                </FieldLabel>
+                <PasswordField>
+                  <PasswordFieldInput
+                    required
+                    autoComplete="new-password"
+                    onValueChange={() => {
+                      if (confirmPasswordRef.current?.value)
+                        formActionsRef.current?.validate('confirmPassword')
+                    }}
+                    placeholder={t(($) => $.passwordPlaceholder, { ns: 'login' })}
+                  />
+                  <PasswordFieldToggle aria-label={t(($) => $.showPassword, { ns: 'login' })} />
+                </PasswordField>
                 <FieldValidity>
                   {({ validity }) =>
                     validity.valid !== false ? (
@@ -171,20 +177,25 @@ const ChangePasswordForm = () => {
                   const confirmationValue = String(value)
                   return !confirmationValue || confirmationValue === formValues.password
                     ? null
-                    : t(($) => $['account.notEqual'], { ns: 'common' })
+                    : t(($) => $['account.notEqual'], { ns: 'accountSettings' })
                 }}
                 className="mb-5"
               >
-                <FieldLabel>{t(($) => $['account.confirmPassword'], { ns: 'common' })}</FieldLabel>
-                <Input
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  spellCheck={false}
-                  ref={confirmPasswordRef}
-                  placeholder={t(($) => $.confirmPasswordPlaceholder, { ns: 'login' }) || ''}
-                />
-                <FieldError>{t(($) => $['account.notEqual'], { ns: 'common' })}</FieldError>
+                <FieldLabel>
+                  {t(($) => $['account.confirmPassword'], { ns: 'accountSettings' })}
+                </FieldLabel>
+                <PasswordField>
+                  <PasswordFieldInput
+                    required
+                    autoComplete="new-password"
+                    ref={confirmPasswordRef}
+                    placeholder={t(($) => $.confirmPasswordPlaceholder, { ns: 'login' })}
+                  />
+                  <PasswordFieldToggle aria-label={t(($) => $.showPassword, { ns: 'login' })} />
+                </PasswordField>
+                <FieldError>
+                  {t(($) => $['account.notEqual'], { ns: 'accountSettings' })}
+                </FieldError>
               </Field>
               <Button
                 type="submit"

@@ -1,8 +1,7 @@
+import type { TFunction } from 'i18next'
 import type { Item as SelectItem } from './type-select'
-import type { SelectorTranslate } from '@/app/components/app/configuration/utils'
 import type { InputVar, MoreInfo } from '@/app/components/workflow/types'
 import { produce } from 'immer'
-import { getStringSelectorTranslate } from '@/app/components/app/configuration/utils'
 import { DEFAULT_FILE_UPLOAD_SETTING } from '@/app/components/workflow/constants'
 import { ChangeType, InputVarType, SupportUploadFileTypes } from '@/app/components/workflow/types'
 import { checkKeys } from '@/utils/var'
@@ -15,7 +14,7 @@ type ValidateConfigModalPayloadOptions = {
   tempPayload: InputVar
   payload?: InputVar
   maxFileUploadLimit?: number
-  t: SelectorTranslate<'appDebug' | 'workflow'>
+  t: TFunction<['appDebug', 'workflow']>
 }
 
 export type ConfigModalValidationError = {
@@ -91,10 +90,25 @@ export const updatePayloadField = (payload: InputVar, key: string, value: unknow
 
 export const createPayloadForType = (payload: InputVar, type: InputVarType) => {
   return produce(payload, (draft) => {
+    const fileInputTypes: readonly InputVarType[] = [
+      InputVarType.singleFile,
+      InputVarType.multiFiles,
+    ]
+
+    if (fileInputTypes.includes(draft.type) && draft.type !== type) draft.default = undefined
     draft.type = type
     if (type === InputVarType.select) draft.default = undefined
+    if (isStringInputType(type) && typeof draft.default === 'number')
+      draft.default = String(draft.default)
+    if (type === InputVarType.number && typeof draft.default !== 'number') {
+      const value =
+        typeof draft.default === 'string' && draft.default.trim() !== ''
+          ? Number(draft.default)
+          : Number.NaN
+      draft.default = Number.isFinite(value) ? value : undefined
+    }
 
-    if ([InputVarType.singleFile, InputVarType.multiFiles].includes(type)) {
+    if (fileInputTypes.includes(type)) {
       draft.hide = false
       const fileUploadSettingKeys = Object.keys(DEFAULT_FILE_UPLOAD_SETTING) as Array<
         keyof typeof DEFAULT_FILE_UPLOAD_SETTING
@@ -112,13 +126,12 @@ export const createPayloadForType = (payload: InputVar, type: InputVarType) => {
 export const buildSelectOptions = ({
   isBasicApp,
   supportFile,
-  t: rawTranslate,
+  t,
 }: {
   isBasicApp: boolean
   supportFile?: boolean
-  t: SelectorTranslate<'appDebug' | 'workflow'>
+  t: TFunction<['appDebug', 'workflow']>
 }): SelectItem[] => {
-  const t = getStringSelectorTranslate(rawTranslate)
   return [
     {
       name: t(($) => $['variableConfig.text-input'], { ns: 'appDebug' }),
@@ -167,12 +180,11 @@ export const validateConfigModalPayload = ({
   tempPayload,
   payload,
   maxFileUploadLimit,
-  t: rawTranslate,
+  t,
 }: ValidateConfigModalPayloadOptions): ValidateConfigModalPayloadResult => {
-  const t = getStringSelectorTranslate(rawTranslate)
-  const normalizedTempPayload = [InputVarType.singleFile, InputVarType.multiFiles].includes(
-    tempPayload.type,
-  )
+  const fileInputTypes: readonly InputVarType[] = [InputVarType.singleFile, InputVarType.multiFiles]
+
+  const normalizedTempPayload = fileInputTypes.includes(tempPayload.type)
     ? {
         ...tempPayload,
         hide: false,
@@ -186,10 +198,24 @@ export const validateConfigModalPayload = ({
   const jsonSchemaValue = tempPayload.json_schema
   const schemaEmpty = isJsonSchemaEmpty(jsonSchemaValue)
   const normalizedJsonSchema = schemaEmpty ? undefined : jsonSchemaValue
-  const payloadToSave =
+  const payloadToSave = produce(
     normalizedTempPayload.type === InputVarType.jsonObject && schemaEmpty
       ? { ...normalizedTempPayload, json_schema: undefined }
-      : normalizedTempPayload
+      : normalizedTempPayload,
+    (draft) => {
+      if (
+        !fileInputTypes.includes(draft.type) ||
+        !draft.default ||
+        typeof draft.default !== 'object'
+      )
+        return
+
+      const files = Array.isArray(draft.default) ? draft.default : [draft.default]
+      for (const file of files) {
+        if (file?.originalFile instanceof Blob) delete file.originalFile
+      }
+    },
+  )
 
   const moreInfo =
     normalizedTempPayload.variable === payload?.variable
@@ -241,7 +267,7 @@ export const validateConfigModalPayload = ({
     }
   }
 
-  if ([InputVarType.singleFile, InputVarType.multiFiles].includes(normalizedTempPayload.type)) {
+  if (fileInputTypes.includes(normalizedTempPayload.type)) {
     if (!normalizedTempPayload.allowed_file_types?.length) {
       return {
         errorField: 'allowed_file_types',
